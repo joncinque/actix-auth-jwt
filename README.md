@@ -1,6 +1,10 @@
 # actix-auth-jwt
 Sample actix-web application for user management using extras for JWT authentication
 
+NOTE: This repo is currently a work-in-progress, so it is not ready for any 
+production use whatsoever.  Either way, feel free to reach out with any
+questions or concerns.
+
 ## Prereqs
 
 * Rust 1.42
