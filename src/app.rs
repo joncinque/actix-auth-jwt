@@ -1,19 +1,25 @@
-use std::sync::Mutex;
 use actix_web::web::{self, ServiceConfig};
+use dotenv::dotenv;
+use dotenv_codegen::dotenv;
 
-use crate::auth_service::make_auth_service;
-use crate::app_state::AuthState;
+use crate::service::auth_service;
+use crate::state::{self, AuthState};
 use crate::models::base::User;
-use crate::repos::base::UserRepo;
-use crate::repos::inmemory::InMemoryUserRepo;
+use crate::passwords;
 
 pub async fn data_factory<T: User + 'static>() -> std::io::Result<AuthState<T>> {
-    let user_repo: Mutex<Box<dyn UserRepo<T>>> = Mutex::new(Box::new(InMemoryUserRepo::<T>::new()));
-    Ok(AuthState { user_repo })
+    dotenv().ok();
+    let user_repo = state::inmemory_repo();
+    let secret_key = String::from(dotenv!("HASHER_SECRET_KEY"));
+    let hasher = passwords::argon2_password_hasher(secret_key.clone());
+    let verifier = passwords::argon2_password_verifier(secret_key.clone());
+    let transport  = state::inmemory_transport();
+    let sender = state::inmemory_sender(transport);
+    Ok(AuthState { user_repo, hasher, verifier, sender })
 }
 
 pub fn config_app<T: User + 'static>() -> Box<dyn Fn(&mut ServiceConfig)> {
     Box::new(move |cfg: &mut ServiceConfig| {
-        cfg.service(make_auth_service::<T>(web::scope("/auth")));
+        cfg.service(auth_service::<T>(web::scope("/auth")));
     })
 }
