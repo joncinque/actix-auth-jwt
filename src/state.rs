@@ -17,7 +17,7 @@ pub struct AuthState<T> {
 
 pub fn inmemory_repo<T: User + 'static>() -> ShareableData<InMemoryUserRepo<T>> {
     let config = ();
-    shareable_data(InMemoryUserRepo::<T>::new(&config))
+    shareable_data(<InMemoryUserRepo<T> as UserRepo<T>>::from(&config))
 }
 
 pub fn inmemory_transport() -> ShareableData<InMemoryTransport> {

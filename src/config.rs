@@ -1,6 +1,7 @@
 use crate::repos::base::UserRepo;
 use crate::models::base::User;
 use crate::emails::EmailConfig;
+use crate::passwords::PasswordHasherConfig;
 
 pub struct AppConfig<T, U>
     where
@@ -8,14 +9,15 @@ pub struct AppConfig<T, U>
         U: UserRepo<T> {
     pub user_repo: U::Config,
     pub sender: EmailConfig,
+    pub hasher: PasswordHasherConfig,
 }
 
-impl<T, U> Clone for AppConfig<T, U>
-    where T: User, U: UserRepo<T> {
-        fn clone(&self) -> AppConfig<T, U> {
-            AppConfig {
-                user_repo: self.user_repo.clone(),
-                sender: self.sender.clone(),
-            }
+impl<T, U> Clone for AppConfig<T, U> where T: User, U: UserRepo<T> {
+    fn clone(&self) -> AppConfig<T, U> {
+        AppConfig {
+            user_repo: self.user_repo.clone(),
+            sender: self.sender.clone(),
+            hasher: self.hasher.clone(),
         }
+    }
 }

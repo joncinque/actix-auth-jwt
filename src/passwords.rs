@@ -16,7 +16,13 @@ fn random_salt(len: u32, rng: &mut ThreadRng) -> Result<Vec<u8>, AuthApiError> {
     Ok(bytes)
 }
 
-pub fn argon2_password_hasher(secret_key: String) -> PasswordHasher {
+#[derive(Clone)]
+pub struct PasswordHasherConfig {
+    pub secret_key: String,
+}
+
+pub fn argon2_password_hasher(config: &PasswordHasherConfig) -> PasswordHasher {
+    let secret_key = config.secret_key.clone();
     Box::new(move |password| {
         let secret_key = secret_key.clone();
         Box::pin(async move {
@@ -31,7 +37,8 @@ pub fn argon2_password_hasher(secret_key: String) -> PasswordHasher {
     })
 }
 
-pub fn argon2_password_verifier(secret_key: String) -> PasswordVerifier {
+pub fn argon2_password_verifier(config: &PasswordHasherConfig) -> PasswordVerifier {
+    let secret_key = config.secret_key.clone();
     Box::new(move |password, hash| {
         let secret_key = secret_key.clone();
         Box::pin(async move {
@@ -75,9 +82,11 @@ mod tests {
 
     #[actix_rt::test]
     async fn argon2_password_hash_verify() {
-        let secret_key = String::from("SECRET!");
-        let hasher = argon2_password_hasher(secret_key.clone());
-        let verifier = argon2_password_verifier(secret_key);
+        let config = PasswordHasherConfig {
+            secret_key: String::from("SECRET!"),
+        };
+        let hasher = argon2_password_hasher(&config);
+        let verifier = argon2_password_verifier(&config);
         let password = String::from("p@ssword");
         let hash = (hasher)(password.clone()).await.unwrap();
         let verified = (verifier)(password.clone(), hash).await.unwrap();

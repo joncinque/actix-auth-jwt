@@ -1,10 +1,13 @@
 use actix_web::{App, HttpServer};
 use actix_web::middleware::{Logger, NormalizePath};
+use dotenv::dotenv;
+use dotenv_codegen::dotenv;
 
 use actix_auth_jwt::app;
 use actix_auth_jwt::config::AppConfig;
 use actix_auth_jwt::emails::{EmailConfig, EmailTransportType};
 use actix_auth_jwt::models::simple::SimpleUser;
+use actix_auth_jwt::passwords::PasswordHasherConfig;
 use actix_auth_jwt::repos::inmemory::InMemoryUserRepo;
 
 #[actix_rt::main]
@@ -15,11 +18,19 @@ async fn main() -> std::io::Result<()> {
     type SimpleRepo = InMemoryUserRepo<SimpleUser>;
 
     env_logger::init();
+    dotenv().ok();
+
+    let secret_key = String::from(dotenv!("HASHER_SECRET_KEY"));
+    let from = String::from(dotenv!("FROM_EMAIL"));
+
     let config = AppConfig {
         user_repo: (),
         sender: EmailConfig {
-            from: String::from("admin@example.com"),
+            from: from,
             transport_type: EmailTransportType::InMemory,
+        },
+        hasher: PasswordHasherConfig {
+            secret_key,
         }
     };
 

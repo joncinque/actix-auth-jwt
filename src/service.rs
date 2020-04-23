@@ -25,8 +25,9 @@ async fn index() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
 
-async fn register<T: User, U: UserRepo<T>>(req: HttpRequest, registration: Json<T::RegisterDto>, data: Data<AuthState<U>>)
-    -> Result<HttpResponse, AuthApiError> {
+async fn register<T, U>(req: HttpRequest, registration: Json<T::RegisterDto>, data: Data<AuthState<U>>)
+    -> Result<HttpResponse, AuthApiError>
+    where T: User, U: UserRepo<T> {
     let registration = registration.into_inner();
     registration.validate().map_err(errors::from_validation_errors)?;
 

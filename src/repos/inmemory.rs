@@ -14,7 +14,7 @@ pub struct InMemoryUserRepo<T>
 
 impl<T> InMemoryUserRepo<T>
     where T: User {
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         let users = HashMap::new();
         let unconfirmed_users = HashMap::new();
         let password_resets = HashMap::new();
@@ -32,8 +32,8 @@ impl<T> UserRepo<T> for InMemoryUserRepo<T>
 
     type Config = ();
 
-    fn new(_config: &Self::Config) -> Self {
-        Self::empty()
+    fn from(_config: &Self::Config) -> Self {
+        Self::new()
     }
 
     async fn get<'a>(&'a self, key: &T::Key) -> Option<&'a T> {
@@ -139,7 +139,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn create_user() {
-        let mut repo = InMemoryUserRepo::empty();
+        let mut repo = InMemoryUserRepo::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -153,7 +153,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_double_create_user() {
-        let mut repo = InMemoryUserRepo::empty();
+        let mut repo = InMemoryUserRepo::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user1 = SimpleUser::new(email.clone(), password.clone());
@@ -169,7 +169,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn get_user() {
-        let mut repo = InMemoryUserRepo::empty();
+        let mut repo = InMemoryUserRepo::new();
         let email: <SimpleUser as User>::Key = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -181,7 +181,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_get_user() {
-        let repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let user = repo.get(&email).await;
         assert!(user.is_none());
@@ -189,7 +189,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_remove_user() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email: <SimpleUser as User>::Key = String::from("user@example.com");
         let err = repo.remove(&email).await.unwrap_err();
         if let AuthApiError::NotFound { key } = err {
@@ -201,7 +201,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn remove_user() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -216,7 +216,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_update_user() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -230,7 +230,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn update_user() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -248,7 +248,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn confirm_user() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let key;
@@ -271,7 +271,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_insert_user_exists_unconfirmed() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         {
@@ -292,7 +292,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_insert_user_exists_confirmed() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         {
@@ -314,7 +314,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn password_reset() {
-        let mut repo = InMemoryUserRepo::<SimpleUser>::empty();
+        let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         {

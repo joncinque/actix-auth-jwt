@@ -1,7 +1,8 @@
 use lettre::{SendableEmail, Transport};
 
+pub type ResultTransport<T, E> = dyn Transport<'static, Result = Result<T, E>>;
 pub type EmptyResult = Result<(), ()>;
-pub type EmptyResultTransport = dyn Transport<'static, Result = EmptyResult>;
+pub type EmptyResultTransport = ResultTransport<(), ()>;
 
 pub struct InMemoryTransport {
     pub emails: Vec<SendableEmail>,
