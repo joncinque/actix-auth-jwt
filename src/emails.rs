@@ -1,20 +1,37 @@
 use lettre_email::EmailBuilder;
 
 use crate::errors::{self, AuthApiError};
-use crate::transports::EmptyResultTransport;
-use crate::types::ShareableData;
+use crate::transports::{InMemoryTransport, EmptyResultTransport};
+use crate::types::{shareable_data, ShareableData};
 
 pub struct EmailSender {
     from: String,
     transport: ShareableData<EmptyResultTransport>,
 }
 
+#[derive(Clone)]
+pub enum EmailTransportType {
+    InMemory,
+    Stub,
+}
+
+#[derive(Clone)]
+pub struct EmailConfig {
+    pub from: String,
+    pub transport_type: EmailTransportType,
+}
+
 impl EmailSender {
     pub fn new(from: String, transport: ShareableData<EmptyResultTransport>) -> Self {
-        EmailSender {
-            from,
-            transport
-        }
+        EmailSender { from, transport }
+    }
+
+    pub fn from(config: &EmailConfig) -> Self {
+        let transport = match config.transport_type {
+            _ => shareable_data(InMemoryTransport::new_positive())
+        };
+        let from = config.from.clone();
+        EmailSender { from, transport }
     }
 
     pub async fn send(&mut self, builder: EmailBuilder) -> Result<(), AuthApiError> {
@@ -29,15 +46,12 @@ impl EmailSender {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, RwLock};
-    //use tokio::sync::RwLock; // once RwLock is Sized? we'll be good
-
     use crate::transports::InMemoryTransport;
     use super::*;
 
     #[actix_rt::test]
     async fn inmemory_sender() {
-        let transport = Arc::new(RwLock::new(InMemoryTransport::new_positive()));
+        let transport = shareable_data(InMemoryTransport::new_positive());
         let base_transport: ShareableData<EmptyResultTransport> = transport.clone();
         let from = String::from("admin@example.com");
         let to = "test@example.com";

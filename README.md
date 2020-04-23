@@ -14,30 +14,46 @@ questions or concerns.
 ## Dependencies
 
 * `actix-web`, `actix-http`, `actix-rt`: all main actix components
-* `argonautica`: for argon2 password hashing
 * `mongodb`, `bson`: requirements for db interaction
-* `dotenv`: managing secrets
+* `dotenv`, `dotenv-codegen`: managing production secrets
 * `log`, `env_logger`: easy logging to stdout
 * `serde`, `serde_json`: easy (de)serialization of structs
 * `failure`: for digestible error messages
-* `uuid` v4 with `serde`: generating random user ids and serializing to string
+* `uuid` with `serde`: generating random user ids and serializing to string
 * `jsonwebtoken`: creating JWTs on login, validating authenticated routes
+* `rust-argon2`: for argon2 password hashing
 
 ## Building
 
 `cargo build`
 
-## Running
+## .env setup
 
-* Setup your .env file with the following
+* Setup a `.env` file with the following
 ```bash
-MONGO_URI=http://localhost:27017
-MONGO_DB=app
-MONGO_COLLECTION=users
-SECRET_KEY=some_randomly_generated_string_of_letters_and_numbers
+HASHER_SECRET_KEY=
+FROM_EMAIL=
+MONGO_URI=
+MONGO_DB=
+MONGO_COLLECTION=
+REDIS_URI=
 ```
-* `cargo run` 
+* `HASHER_SECRET_KEY`: randomly generated string of letters and numbers 
+* `FROM_EMAIL`: valid email address used for sending emails to users
+* (Optional) MongoDB setup
+  - `MONGO_URI`: uri of mongo instance, can use the full uri spec including
+user / password / auth db
+  - `MONGO_DB`: db name
+  - `MONGO_COLLECTION`: collection name for storing users
+* (Optional) Redis setup
 
 ## Testing
 
 `cargo test`
+
+## TODO Items
+
+* `lettre` update to version 1 or 0.10 with new email builder
+* Transition email sending to async, NOTE that `lettre` currently has no plans for this
+* Update password hashing to async
+* Use `tokio::sync::RwLock` once they no longer require `Sized`

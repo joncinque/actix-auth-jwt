@@ -12,3 +12,7 @@ use std::sync::{Arc, RwLock};
 pub type PinFutureObj<Output> = Pin<Box<dyn Future<Output = Output>>>;
 
 pub type ShareableData<T> = Arc<RwLock<T>>;
+
+pub fn shareable_data<T>(data: T) -> ShareableData<T> {
+    Arc::new(RwLock::new(data))
+}

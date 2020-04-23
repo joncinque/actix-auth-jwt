@@ -1,4 +1,5 @@
 pub mod app;
+pub mod config;
 pub mod emails;
 pub mod errors;
 pub mod dtos;

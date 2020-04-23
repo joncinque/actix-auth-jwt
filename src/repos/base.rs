@@ -16,4 +16,7 @@ pub trait UserRepo<T>
 
     async fn password_reset(&mut self, key: &T::Key) -> Result<T::Id, AuthApiError>;
     async fn password_reset_confirm(&mut self, id: &T::Id, password: &str) -> Result<(), AuthApiError>;
+
+    type Config: Send + Sync + Clone;
+    fn new(config: &Self::Config) -> Self;
 }
