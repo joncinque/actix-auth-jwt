@@ -4,18 +4,18 @@ use crate::errors::AuthApiError;
 use crate::models::base::User;
 
 #[async_trait]
-pub trait UserRepo<T>
-    where T: User {
-    async fn get(&self, key: &T::Key) -> Option<&T>;
-    async fn insert(&mut self, user: T) -> Result<(), AuthApiError>;
-    async fn remove(&mut self, key: &T::Key) -> Result<T, AuthApiError>;
-    async fn update(&mut self, user: T) -> Result<(), AuthApiError>;
+pub trait UserRepo<U>
+    where U: User {
+    async fn get_by_key(&self, key: &U::Key) -> Option<&U>;
+    async fn get_by_id(&self, id: &U::Id) -> Option<&U>;
 
-    async fn insert_unconfirmed(&mut self, user: T) -> Result<T::Id, AuthApiError>;
-    async fn confirm(&mut self, id: &T::Id) -> Result<(), AuthApiError>;
+    async fn insert(&mut self, user: U) -> Result<(), AuthApiError>;
+    async fn remove(&mut self, id: &U::Id) -> Result<U, AuthApiError>;
+    async fn update(&mut self, user: U) -> Result<(), AuthApiError>;
+    async fn confirm(&mut self, id: &U::Id) -> Result<(), AuthApiError>;
 
-    async fn password_reset(&mut self, key: &T::Key) -> Result<T::Id, AuthApiError>;
-    async fn password_reset_confirm(&mut self, id: &T::Id, password: &str) -> Result<(), AuthApiError>;
+    async fn password_reset(&mut self, key: &U::Key) -> Result<U::Id, AuthApiError>;
+    async fn password_reset_confirm(&mut self, id: &U::Id, password: &str) -> Result<(), AuthApiError>;
 
     type Config: Send + Sync + Clone;
     fn from(config: &Self::Config) -> Self;

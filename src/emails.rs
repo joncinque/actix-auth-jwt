@@ -1,5 +1,4 @@
 use lettre_email::EmailBuilder;
-use lettre::Transport;
 
 use crate::errors::{self, AuthApiError};
 use crate::transports::{InMemoryTransport, EmptyResultTransport};

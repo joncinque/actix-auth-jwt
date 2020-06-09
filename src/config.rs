@@ -2,22 +2,32 @@ use crate::repos::base::UserRepo;
 use crate::models::base::User;
 use crate::emails::EmailConfig;
 use crate::passwords::PasswordHasherConfig;
+use crate::jwts::base::{JwtAuthenticatorConfig, JwtBlacklist};
 
-pub struct AppConfig<T, U>
+pub struct AppConfig<U, R, B>
     where
-        T: User,
-        U: UserRepo<T> {
-    pub user_repo: U::Config,
+        U: User,
+        R: UserRepo<U>,
+        B: JwtBlacklist<U> {
+    pub user_repo: R::Config,
     pub sender: EmailConfig,
     pub hasher: PasswordHasherConfig,
+    pub authenticator: JwtAuthenticatorConfig,
+    pub blacklist: B::Config,
 }
 
-impl<T, U> Clone for AppConfig<T, U> where T: User, U: UserRepo<T> {
-    fn clone(&self) -> AppConfig<T, U> {
+impl<U, R, B> Clone for AppConfig<U, R, B>
+    where
+        U: User,
+        R: UserRepo<U>,
+        B: JwtBlacklist<U> {
+    fn clone(&self) -> AppConfig<U, R, B> {
         AppConfig {
             user_repo: self.user_repo.clone(),
             sender: self.sender.clone(),
             hasher: self.hasher.clone(),
+            authenticator: self.authenticator.clone(),
+            blacklist: self.blacklist.clone(),
         }
     }
 }

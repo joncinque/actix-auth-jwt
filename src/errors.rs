@@ -17,6 +17,10 @@ pub enum AuthApiError {
     NotFound { key: String },
     #[fail(display = "User already exists: {}", key)]
     AlreadyExists { key: String },
+    #[fail(display = "One-time resource already used")]
+    AlreadyUsed,
+    #[fail(display = "Temporary authentication token expired")]
+    TokenExpired,
     #[fail(display = "User awaiting confirmation: {}", key)]
     Unconfirmed { key: String },
     #[fail(display = "Authentication credentials not provided or invalid")]
@@ -66,6 +70,8 @@ impl ResponseError for AuthApiError {
             AuthApiError::ValidationErrors { .. } => StatusCode::BAD_REQUEST,
             AuthApiError::NotFound { .. } => StatusCode::BAD_REQUEST,
             AuthApiError::AlreadyExists { .. } => StatusCode::BAD_REQUEST,
+            AuthApiError::AlreadyUsed { .. } => StatusCode::BAD_REQUEST,
+            AuthApiError::TokenExpired { .. } => StatusCode::UNAUTHORIZED,
             AuthApiError::Unconfirmed { .. } => StatusCode::BAD_REQUEST,
             AuthApiError::Unauthenticated => StatusCode::UNAUTHORIZED,
             AuthApiError::Unauthorized => StatusCode::FORBIDDEN,

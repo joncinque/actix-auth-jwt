@@ -5,30 +5,30 @@ use crate::errors::AuthApiError;
 use crate::repos::base::UserRepo;
 use crate::models::base::{User, Status};
 
-pub struct InMemoryUserRepo<T>
-    where T: User {
-    users: HashMap<T::Key, T>,
-    unconfirmed_users: HashMap<T::Id, T::Key>,
-    password_resets: HashMap<T::Id, T::Key>,
+pub struct InMemoryUserRepo<U>
+    where U: User {
+    users_by_id: HashMap<U::Id, U>,
+    users_by_key: HashMap<U::Key, U::Id>,
+    password_resets: HashMap<U::Id, U::Id>,
 }
 
-impl<T> InMemoryUserRepo<T>
-    where T: User {
+impl<U> InMemoryUserRepo<U>
+    where U: User {
     pub fn new() -> Self {
-        let users = HashMap::new();
-        let unconfirmed_users = HashMap::new();
+        let users_by_key = HashMap::new();
+        let users_by_id = HashMap::new();
         let password_resets = HashMap::new();
         InMemoryUserRepo {
-            users,
-            unconfirmed_users,
+            users_by_key,
+            users_by_id,
             password_resets,
         }
     }
 }
 
 #[async_trait]
-impl<T> UserRepo<T> for InMemoryUserRepo<T>
-    where T: User {
+impl<U> UserRepo<U> for InMemoryUserRepo<U>
+    where U: User {
 
     type Config = ();
 
@@ -36,64 +36,48 @@ impl<T> UserRepo<T> for InMemoryUserRepo<T>
         Self::new()
     }
 
-    async fn get<'a>(&'a self, key: &T::Key) -> Option<&'a T> {
-        self.users.get(key)
+    async fn get_by_key<'a>(&'a self, key: &U::Key) -> Option<&'a U> {
+        match self.users_by_key.get(key) {
+            None => None,
+            Some(id) => self.get_by_id(id).await,
+        }
     }
 
-    async fn insert(&mut self, user: T) -> Result<(), AuthApiError> {
+    async fn get_by_id<'a>(&'a self, id: &U::Id) -> Option<&'a U> {
+        self.users_by_id.get(id)
+    }
+
+    async fn insert(&mut self, user: U) -> Result<(), AuthApiError> {
         let key = user.key().clone();
-        match self.users.entry(key) {
+        match self.users_by_key.entry(key) {
             Entry::Occupied(e) => Err(
                 AuthApiError::AlreadyExists { key: format!("{}", e.key()) }
             ),
             Entry::Vacant(e) => {
-                e.insert(user);
-                Ok(())
-            }
-        }
-    }
-
-    async fn insert_unconfirmed(&mut self, user: T) -> Result<T::Id, AuthApiError> {
-        let key = user.key().clone();
-        let id = user.id().clone();
-        let status = user.status().clone();
-        {
-            if let Err(err) = self.insert(user).await {
-                return Err(err)
-            }
-        }
-        if status == Status::Unconfirmed {
-            match self.unconfirmed_users.entry(id) {
-                Entry::Occupied(e) => Err(
-                    AuthApiError::AlreadyExists { key: format!("{}", e.key()) }
-                ),
-                Entry::Vacant(e) => {
-                    let id = e.key().clone();
-                    e.insert(key);
-                    Ok(id)
+                let id = user.id().clone();
+                match self.users_by_id.entry(id) {
+                    Entry::Occupied(f) => Err(
+                        AuthApiError::AlreadyExists { key: format!("{}", f.key()) }
+                    ),
+                    Entry::Vacant(f) => {
+                        e.insert(user.id().clone());
+                        f.insert(user);
+                        Ok(())
+                    }
                 }
             }
-        } else {
-            match self.users.get(&key) {
-                Some(e) => Ok(e.id().clone()),
-                None => Err(AuthApiError::NotFound { key: format!("{}", key) }),
-            }
         }
     }
 
-    async fn confirm(&mut self, id: &T::Id) -> Result<(), AuthApiError> {
+    async fn confirm(&mut self, id: &U::Id) -> Result<(), AuthApiError> {
         let id = id.clone();
-        match self.unconfirmed_users.entry(id) {
-            Entry::Occupied(e) => {
-                let (_, key) = e.remove_entry();
-                match self.users.entry(key) {
-                    Entry::Occupied(mut e) => {
-                        Ok(e.get_mut().set_status(Status::Confirmed))
-                    },
-                    Entry::Vacant(e) => {
-                        let key = format!("{}", e.into_key());
-                        Err(AuthApiError::NotFound { key })
-                    }
+        match self.users_by_id.entry(id) {
+            Entry::Occupied(mut e) => {
+                let user = e.get_mut();
+                if *user.status() == Status::Unconfirmed {
+                    Ok(user.set_status(Status::Confirmed))
+                } else {
+                    Err(AuthApiError::AlreadyUsed)
                 }
             },
             Entry::Vacant(e) => {
@@ -103,17 +87,21 @@ impl<T> UserRepo<T> for InMemoryUserRepo<T>
         }
     }
 
-    async fn remove(&mut self, key: &T::Key) -> Result<T, AuthApiError> {
-        let key = key.clone();
-        match self.users.remove(&key) {
-            Some(v) => Ok(v),
-            None => Err(AuthApiError::NotFound { key: format!("{}", key) })
+    async fn remove(&mut self, id: &U::Id) -> Result<U, AuthApiError> {
+        match self.users_by_id.remove(&id) {
+            Some(v) => {
+                self.users_by_key.remove(v.key());
+                Ok(v)
+            },
+            None => {
+                Err(AuthApiError::NotFound { key: format!("{}", id) })
+            }
         }
     }
 
-    async fn update(&mut self, user: T) -> Result<(), AuthApiError> {
-        let key = user.key().clone();
-        match self.users.entry(key) {
+    async fn update(&mut self, user: U) -> Result<(), AuthApiError> {
+        let id = user.id().clone();
+        match self.users_by_id.entry(id) {
             Entry::Occupied(mut e) => {
                 e.insert(user);
                 Ok(())
@@ -122,12 +110,12 @@ impl<T> UserRepo<T> for InMemoryUserRepo<T>
         }
     }
 
-    async fn password_reset(&mut self, key: &T::Key) -> Result<T::Id, AuthApiError> {
-        let reset_id = T::generate_id();
+    async fn password_reset(&mut self, key: &U::Key) -> Result<U::Id, AuthApiError> {
+        let reset_id = U::generate_id();
         Ok(reset_id)
     }
 
-    async fn password_reset_confirm(&mut self, id: &T::Id, password: &str) -> Result<(), AuthApiError> {
+    async fn password_reset_confirm(&mut self, id: &U::Id, password: &str) -> Result<(), AuthApiError> {
         Ok(())
     }
 }
@@ -143,12 +131,16 @@ mod tests {
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
-        let userid = user.userid.clone();
+        let id = user.id().clone();
         repo.insert(user).await.unwrap();
-        let user = repo.get(&email).await.unwrap();
+        let user = repo.get_by_key(&email).await.unwrap();
         assert_eq!(email, user.email);
         assert_eq!(password, user.password);
-        assert_eq!(userid, user.userid);
+        assert_eq!(id, *user.id());
+        let user = repo.get_by_id(&id).await.unwrap();
+        assert_eq!(email, user.email);
+        assert_eq!(password, user.password);
+        assert_eq!(id, *user.id());
     }
 
     #[actix_rt::test]
@@ -173,8 +165,12 @@ mod tests {
         let email: <SimpleUser as User>::Key = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
+        let id = user.id().clone();
         repo.insert(user).await.unwrap();
-        let user = repo.get(&email).await.unwrap();
+        let user = repo.get_by_key(&email).await.unwrap();
+        assert_eq!(email, user.email);
+        assert_eq!(password, user.password);
+        let user = repo.get_by_id(&id).await.unwrap();
         assert_eq!(email, user.email);
         assert_eq!(password, user.password);
     }
@@ -183,17 +179,20 @@ mod tests {
     async fn fail_get_user() {
         let repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
-        let user = repo.get(&email).await;
+        let user = repo.get_by_key(&email).await;
+        assert!(user.is_none());
+        let id = String::from("unknown_id");
+        let user = repo.get_by_id(&id).await;
         assert!(user.is_none());
     }
 
     #[actix_rt::test]
     async fn fail_remove_user() {
         let mut repo = InMemoryUserRepo::<SimpleUser>::new();
-        let email: <SimpleUser as User>::Key = String::from("user@example.com");
-        let err = repo.remove(&email).await.unwrap_err();
+        let id: <SimpleUser as User>::Id = String::from("some-unknown-id");
+        let err = repo.remove(&id).await.unwrap_err();
         if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, email);
+            assert_eq!(key, id);
         } else {
             panic!("Wrong error type");
         }
@@ -206,12 +205,12 @@ mod tests {
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
         repo.insert(user).await.unwrap();
-        let user = repo.get(&email).await.unwrap();
-        let userid = user.userid.to_string();
-        let user = repo.remove(&email).await.unwrap();
+        let user = repo.get_by_key(&email).await.unwrap();
+        let id = user.id().clone();
+        let user = repo.remove(&id).await.unwrap();
         assert_eq!(email, user.email);
         assert_eq!(password, user.password);
-        assert_eq!(userid, user.userid);
+        assert_eq!(id, *user.id());
     }
 
     #[actix_rt::test]
@@ -220,9 +219,10 @@ mod tests {
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
+        let id = user.id().clone();
         let err = repo.update(user).await.unwrap_err();
         if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, email);
+            assert_eq!(key, id);
         } else {
             panic!("Wrong error type");
         }
@@ -236,11 +236,11 @@ mod tests {
         let user = SimpleUser::new(email.clone(), password.clone());
         let userid = user.userid.clone();
         repo.insert(user).await.unwrap();
-        let mut user = repo.get(&email).await.unwrap().clone();
+        let mut user = repo.get_by_key(&email).await.unwrap().clone();
         let password2 = String::from("p@ssword2");
         user.password = password2.clone();
         repo.update(user).await.unwrap();
-        let user = repo.get(&email).await.unwrap().clone();
+        let user = repo.get_by_key(&email).await.unwrap().clone();
         assert_eq!(password2, user.password);
         assert_eq!(userid, user.userid);
         assert_eq!(email, user.email);
@@ -251,20 +251,20 @@ mod tests {
         let mut repo = InMemoryUserRepo::<SimpleUser>::new();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
-        let key;
+        let id;
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            key = String::from(repo.insert_unconfirmed(user).await.unwrap());
-            assert_ne!(String::new(), key);
+            id = user.id().clone();
+            repo.insert(user).await.unwrap();
         }
         {
-            let user = repo.get(&email).await.unwrap();
+            let user = repo.get_by_key(&email).await.unwrap();
             assert_eq!(Status::Unconfirmed, *user.status());
         }
-        repo.confirm(&key).await.unwrap();
-        let user = repo.get(&email).await.unwrap();
+        repo.confirm(&id).await.unwrap();
+        let user = repo.get_by_key(&email).await.unwrap();
         assert_eq!(Status::Confirmed, *user.status());
-        assert_eq!(key, user.userid);
+        assert_eq!(id, user.userid);
         assert_eq!(email, user.email);
         assert_eq!(password, user.password);
     }
@@ -276,12 +276,11 @@ mod tests {
         let password = String::from("p@ssword");
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            let key = String::from(repo.insert_unconfirmed(user).await.unwrap());
-            assert_ne!(String::new(), key);
+            repo.insert(user).await.unwrap();
         }
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            let err = repo.insert_unconfirmed(user).await.unwrap_err();
+            let err = repo.insert(user).await.unwrap_err();
             if let AuthApiError::AlreadyExists { key } = err {
                 assert_eq!(key, email);
             } else {
@@ -297,13 +296,13 @@ mod tests {
         let password = String::from("p@ssword");
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            let key = String::from(repo.insert_unconfirmed(user).await.unwrap());
-            assert_ne!(String::new(), key);
-            repo.confirm(&key).await.unwrap();
+            let id = user.id().clone();
+            repo.insert(user).await.unwrap();
+            repo.confirm(&id).await.unwrap();
         }
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            let err = repo.insert_unconfirmed(user).await.unwrap_err();
+            let err = repo.insert(user).await.unwrap_err();
             if let AuthApiError::AlreadyExists { key } = err {
                 assert_eq!(key, email);
             } else {
@@ -319,9 +318,9 @@ mod tests {
         let password = String::from("p@ssword");
         {
             let user = SimpleUser::new(email.clone(), password.clone());
-            let key = String::from(repo.insert_unconfirmed(user).await.unwrap());
-            assert_ne!(String::new(), key);
-            repo.confirm(&key).await.unwrap();
+            let id = user.id().clone();
+            repo.insert(user).await.unwrap();
+            repo.confirm(&id).await.unwrap();
         }
     }
 }

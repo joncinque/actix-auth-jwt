@@ -10,7 +10,9 @@ pub struct LoginUser {
 
 #[derive(Serialize)]
 pub struct LoginUserResponse {
-    pub jwt: String,
+    pub access: String,
+    pub refresh: String,
+    pub userid: String,
 }
 
 #[derive(Validate, Serialize, Deserialize)]
