@@ -4,17 +4,22 @@ use crate::errors::{self, AuthApiError};
 use crate::transports::{InMemoryTransport, EmptyResultTransport};
 use crate::types::{shareable_data, ShareableData};
 
+/// Wrapper around lettre transport to generalize transports for the app, and
+/// not needing to parametrize every single function by the transport's Result
+/// type.
 pub struct EmailSender {
     from: String,
     transport: ShareableData<EmptyResultTransport>,
 }
 
+/// Supported lettre transport types, to be expanded
 #[derive(Clone)]
 pub enum EmailTransportType {
     InMemory,
     Stub,
 }
 
+/// Define how to send emails from the app
 #[derive(Clone)]
 pub struct EmailConfig {
     pub from: String,
@@ -34,6 +39,7 @@ impl EmailSender {
         EmailSender { from, transport }
     }
 
+    /// Main send function.  Note that this isn't actually async at the moment!
     pub async fn send(&mut self, builder: EmailBuilder) -> Result<(), AuthApiError> {
         let email = builder
             .from(self.from.as_str())

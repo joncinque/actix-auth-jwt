@@ -13,6 +13,9 @@ use crate::types::{shareable_data, PinFutureObj};
 
 pub type DataFactoryFunc<U, R, B> = Box<dyn Fn() -> PinFutureObj<std::io::Result<AuthState<U, R, B>>>>;
 
+/// Actix-specific helper for creating the `data_factory` as required by the
+/// routes within the service.  Since actix may create multiple versions of this
+/// across tasks and threads, everything must be Box'ed and Pin'ed safely.
 pub fn config_data_factory<U, R, B>(config: AppConfig<U, R, B>) -> DataFactoryFunc<U, R, B>
     where
         U: User + 'static,
@@ -31,6 +34,7 @@ pub fn config_data_factory<U, R, B>(config: AppConfig<U, R, B>) -> DataFactoryFu
     })
 }
 
+/// Actix-specific helper for adding the auth service's routes to the app
 pub fn config_app<U, R, B>() -> Box<dyn Fn(&mut ServiceConfig)>
     where U: User + 'static, R: UserRepo<U> + 'static, B: JwtBlacklist<U> + 'static {
     Box::new(move |cfg: &mut ServiceConfig| {

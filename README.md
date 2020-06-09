@@ -46,6 +46,9 @@ blacklist, and flush tokens
 * `JwtAuthenticator`: configure how to create the JWT pair, e.g. token
 lifetimes, hashing secret
 
+All components have a `from` function which takes their configuration type,
+giving instructions on how to create the component.
+
 ### User
 
 Only `SimpleUser` is provided out of the box, mainly for testing purposes,
@@ -102,6 +105,7 @@ More information can be found at this excellent
 ```bash
 HASHER_SECRET_KEY=
 JWT_SECRET_KEY=
+JWT_ISS=
 FROM_EMAIL=
 MONGO_URI=
 MONGO_DB=
@@ -110,7 +114,7 @@ MONGO_COLLECTION=
 * `HASHER_SECRET_KEY`: randomly generated string of letters and numbers,
 used for hashing user passwords
 * `JWT_SECRET_KEY`: randomly generated string of letters and numbers, used for
-signing JWTs
+* `JWT_ISS`: issuer for the JWT
 * `FROM_EMAIL`: valid email address used for sending emails to users
 * `MONGO_URI`: uri of mongo instance, can use the full uri spec including
 user / password / auth db

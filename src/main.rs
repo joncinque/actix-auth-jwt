@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     let secret_key = String::from(dotenv!("HASHER_SECRET_KEY"));
     let from = String::from(dotenv!("FROM_EMAIL"));
     let iss = String::from(dotenv!("JWT_ISS"));
-    let secret = String::from(dotenv!("JWT_SECRET"));
+    let secret = String::from(dotenv!("JWT_SECRET_KEY"));
 
     let config = AppConfig {
         user_repo: (),

@@ -1,3 +1,5 @@
+//! Contains all data-transfer objects to be used by API routes
+
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 use validator_derive::Validate;

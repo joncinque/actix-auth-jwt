@@ -7,6 +7,7 @@ use lettre_email::error::Error as LettreError;
 use rand::Error as RandError;
 use validator::{ValidationError, ValidationErrors};
 
+/// Domain-specific errors with any extra information required
 #[derive(Fail, Debug)]
 pub enum AuthApiError {
     #[fail(display = "An internal error occurred.  Please try again later.")]
@@ -57,6 +58,7 @@ pub fn from_lettre(_error: LettreError) -> AuthApiError {
     AuthApiError::InternalError
 }
 
+/// Maps domain errors into something usable by REST APIs
 impl ResponseError for AuthApiError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code())
