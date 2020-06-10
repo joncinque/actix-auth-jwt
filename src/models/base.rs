@@ -16,7 +16,7 @@ pub enum Status {
 pub trait User
     where Self: Serialize + DeserializeOwned + Send + Sync {
     type Key: Clone + Eq + Hash + Display + From<String> + Send + Sync;
-    type Id: Clone + Eq + Hash + Display + From<String> + Send + Sync;
+    type Id: Serialize + DeserializeOwned + Clone + Eq + Hash + Display + From<String> + Send + Sync;
 
     fn generate_id() -> Self::Id;
 

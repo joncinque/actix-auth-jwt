@@ -40,13 +40,13 @@ impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
         }
     }
 
-    async fn blacklist(&mut self, token: Claims<U>) -> Result<(), AuthApiError> {
-        match self.outstanding.remove(&token.jti) {
+    async fn blacklist(&mut self, jti: Jti) -> Result<(), AuthApiError> {
+        match self.outstanding.remove(&jti) {
             None => {
-                Err(AuthApiError::NotFound { key: token.jti })
+                Err(AuthApiError::NotFound { key: jti })
             },
             Some(v) => {
-                self.blacklist.insert(token.jti.clone(), token);
+                self.blacklist.insert(jti, v);
                 Ok(())
             },
         }
@@ -74,12 +74,85 @@ impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
 mod tests {
     use super::*;
     use crate::models::simple::SimpleUser;
+    use crate::jwts::base::{JwtAuthenticator, JwtAuthenticatorConfig};
 
     #[actix_rt::test]
-    async fn insert_outstanding() {
+    async fn create_pair() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
     }
 
     #[actix_rt::test]
-    async fn insert() {
+    async fn create_pair_bad_id() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn create_multiple_pairs() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn create_authenticator_bad_secret() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn decode_refresh_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn decode_access_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn check_valid_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn check_blacklisted_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn check_not_found_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
+    }
+
+    #[actix_rt::test]
+    async fn check_gibberish_token() {
+        let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
+        let config = JwtAuthenticatorConfig::test();
+        let mut authenticator = JwtAuthenticator::from(config, blacklist);
+        let user_id = SimpleUser::generate_id();
     }
 }

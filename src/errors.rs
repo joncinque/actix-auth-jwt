@@ -28,6 +28,8 @@ pub enum AuthApiError {
     Unauthenticated,
     #[fail(display = "User not authorized for operation")]
     Unauthorized,
+    #[fail(display = "Error with JWT")]
+    JwtError,
 }
 
 fn into_str(error: &Vec<ValidationError>) -> String {
@@ -58,6 +60,12 @@ pub fn from_lettre(_error: LettreError) -> AuthApiError {
     AuthApiError::InternalError
 }
 
+impl From<jsonwebtoken::errors::Error> for AuthApiError {
+    fn from(_err: jsonwebtoken::errors::Error) -> AuthApiError {
+        AuthApiError::JwtError
+    }
+}
+
 /// Maps domain errors into something usable by REST APIs
 impl ResponseError for AuthApiError {
     fn error_response(&self) -> HttpResponse {
@@ -77,6 +85,7 @@ impl ResponseError for AuthApiError {
             AuthApiError::Unconfirmed { .. } => StatusCode::BAD_REQUEST,
             AuthApiError::Unauthenticated => StatusCode::UNAUTHORIZED,
             AuthApiError::Unauthorized => StatusCode::FORBIDDEN,
+            AuthApiError::JwtError => StatusCode::UNAUTHORIZED,
         }
     }
 }

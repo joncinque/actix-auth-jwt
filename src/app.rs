@@ -27,7 +27,7 @@ pub fn config_data_factory<U, R, B>(config: AppConfig<U, R, B>) -> DataFactoryFu
         let verifier = passwords::argon2_password_verifier(&config.hasher);
         let sender = shareable_data(EmailSender::from(&config.sender));
         let blacklist = B::from(&config.blacklist);
-        let authenticator = shareable_data(JwtAuthenticator::from(&config.authenticator, blacklist));
+        let authenticator = shareable_data(JwtAuthenticator::from(config.authenticator.clone(), blacklist));
         Box::pin(async move {
             Ok(AuthState { user_repo, hasher, verifier, sender, authenticator, })
         })

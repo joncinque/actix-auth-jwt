@@ -43,8 +43,8 @@ async fn main() -> std::io::Result<()> {
             alg: Algorithm::HS512,
             iss,
             secret,
-            access_key_lifetime: Duration::from_secs(60 * 60),
-            refresh_key_lifetime: Duration::from_secs(60 * 60 * 24),
+            bearer_token_lifetime: Duration::from_secs(60 * 60),
+            refresh_token_lifetime: Duration::from_secs(60 * 60 * 24),
         },
         blacklist: (),
     };
