@@ -1,7 +1,8 @@
 use lettre::stub::StubTransport;
 
 use crate::emails::EmailSender;
-use crate::jwts::base::{JwtAuthenticator, JwtAuthenticatorConfig, JwtBlacklist};
+use crate::jwts::authenticator::{JwtAuthenticator, JwtAuthenticatorConfig};
+use crate::jwts::base::JwtBlacklist;
 use crate::jwts::inmemory::InMemoryJwtBlacklist;
 use crate::models::base::User;
 use crate::passwords::{self, PasswordHasher, PasswordVerifier};

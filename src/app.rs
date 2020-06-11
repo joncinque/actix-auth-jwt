@@ -2,7 +2,8 @@ use actix_web::web::{self, ServiceConfig};
 
 use crate::config::AppConfig;
 use crate::emails::EmailSender;
-use crate::jwts::base::{JwtAuthenticator, JwtBlacklist};
+use crate::jwts::authenticator::JwtAuthenticator;
+use crate::jwts::base::JwtBlacklist;
 use crate::service::auth_service;
 use crate::state::AuthState;
 use crate::models::base::User;

@@ -2,7 +2,8 @@ use crate::repos::base::UserRepo;
 use crate::models::base::User;
 use crate::emails::EmailConfig;
 use crate::passwords::PasswordHasherConfig;
-use crate::jwts::base::{JwtAuthenticatorConfig, JwtBlacklist};
+use crate::jwts::authenticator::JwtAuthenticatorConfig;
+use crate::jwts::base::JwtBlacklist;
 
 /// Configuration to be created by hand at the top-level, from secret stores
 /// or .env files, and then passed to `config_data_factory`, which handles

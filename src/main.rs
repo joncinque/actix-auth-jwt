@@ -8,7 +8,7 @@ use std::time::Duration;
 use actix_auth_jwt::app;
 use actix_auth_jwt::config::AppConfig;
 use actix_auth_jwt::emails::{EmailConfig, EmailTransportType};
-use actix_auth_jwt::jwts::base::JwtAuthenticatorConfig;
+use actix_auth_jwt::jwts::authenticator::JwtAuthenticatorConfig;
 use actix_auth_jwt::jwts::inmemory::InMemoryJwtBlacklist;
 use actix_auth_jwt::models::simple::SimpleUser;
 use actix_auth_jwt::passwords::PasswordHasherConfig;

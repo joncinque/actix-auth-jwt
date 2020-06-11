@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use std::collections::hash_map::{HashMap, Entry};
 
 use crate::errors::AuthApiError;
-use crate::jwts::base::{Claims, Jti, JwtBlacklist, TokenStatus};
+use crate::jwts::base::{JwtBlacklist, JwtStatus};
+use crate::jwts::types::{Claims, Jti};
 use crate::models::base::User;
 
 
@@ -30,13 +31,13 @@ impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
         InMemoryJwtBlacklist::new()
     }
 
-    async fn status(&self, jti: &Jti) -> TokenStatus {
+    async fn status(&self, jti: &Jti) -> JwtStatus {
         if self.outstanding.contains_key(jti) {
-            TokenStatus::Outstanding
+            JwtStatus::Outstanding
         } else if self.blacklist.contains_key(jti) {
-            TokenStatus::Blacklisted
+            JwtStatus::Blacklisted
         } else {
-            TokenStatus::NotFound
+            JwtStatus::NotFound
         }
     }
 
@@ -74,7 +75,7 @@ impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
 mod tests {
     use super::*;
     use crate::models::simple::SimpleUser;
-    use crate::jwts::base::{JwtAuthenticator, JwtAuthenticatorConfig};
+    use crate::jwts::authenticator::{JwtAuthenticator, JwtAuthenticatorConfig};
 
     #[actix_rt::test]
     async fn create_pair() {
