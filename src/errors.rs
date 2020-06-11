@@ -8,7 +8,7 @@ use rand::Error as RandError;
 use validator::{ValidationError, ValidationErrors};
 
 /// Domain-specific errors with any extra information required
-#[derive(Fail, Debug)]
+#[derive(Fail, Debug, PartialEq)]
 pub enum AuthApiError {
     #[fail(display = "An internal error occurred.  Please try again later.")]
     InternalError,

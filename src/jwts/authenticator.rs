@@ -1,9 +1,8 @@
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
 use std::marker::PhantomData;
-use std::time::{SystemTime, Duration, UNIX_EPOCH};
-use uuid::Uuid;
+use std::time::{SystemTime, Duration};
 
-use crate::jwts::types::{Jti, TokenType, Claims};
+use crate::jwts::types::{generate_jti, unix_timestamp, Jti, TokenType, Claims};
 use crate::jwts::base::{JwtBlacklist, JwtStatus};
 use crate::errors::AuthApiError;
 use crate::models::base::User;
@@ -19,6 +18,7 @@ pub type RefreshToken = String;
 /// The result of token creation is an access token with its associated refresh
 /// token, to be used when the access token expires.  This can eventually be
 /// expanded for different token types, including simple access or sliding tokens.
+#[derive(Debug)]
 pub struct JwtPair {
     pub bearer: BearerToken,
     pub refresh: RefreshToken,
@@ -70,24 +70,12 @@ pub struct JwtAuthenticator<U: User, B: JwtBlacklist<U>> {
 }
 
 impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
-    pub fn generate_jti() -> Jti {
-        Uuid::new_v4().to_string()
-    }
-
-    pub fn unix_timestamp(time: SystemTime) -> u64 {
-        match time.duration_since(UNIX_EPOCH) {
-            Ok(n) => n.as_secs(),
-            Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-        }
-    }
-
-    fn new_refresh_claims(&self, id: &U::Id, time: SystemTime) -> Claims<U> {
-        let jti = Self::generate_jti();
-        let iat = Self::unix_timestamp(time);
-        let exp = Self::unix_timestamp(time + self.refresh_token_lifetime);
+    fn new_refresh_claims(&self, jti: Jti, id: U::Id, time: SystemTime) -> Claims<U> {
+        let iat = unix_timestamp(time);
+        let exp = unix_timestamp(time + self.refresh_token_lifetime);
         let iss = self.iss.clone();
         let token_type = TokenType::Refresh;
-        let sub = id.clone();
+        let sub = id;
         Claims::<U> {
             jti,
             exp,
@@ -98,10 +86,9 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         }
     }
 
-    fn new_bearer_claims(&self, id: &U::Id, time: SystemTime) -> Claims<U> {
-        let jti = Self::generate_jti();
-        let iat = Self::unix_timestamp(time);
-        let exp = Self::unix_timestamp(time + self.bearer_token_lifetime);
+    fn new_bearer_claims(&self, jti: Jti, id: U::Id, time: SystemTime) -> Claims<U> {
+        let iat = unix_timestamp(time);
+        let exp = unix_timestamp(time + self.bearer_token_lifetime);
         let token_type = TokenType::Bearer;
         let iss = self.iss.clone();
         let sub = id.clone();
@@ -121,12 +108,17 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
 
     pub async fn create_token_pair(&mut self, id: &U::Id) -> Result<JwtPair, AuthApiError> {
         let now = SystemTime::now();
-        let refresh_claims = self.new_refresh_claims(id, now);
+        let jti = generate_jti();
+        let refresh_claims = self.new_refresh_claims(jti.clone(), id.clone(), now);
         let refresh = encode(&self.header, &refresh_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
-        let bearer_claims = self.new_bearer_claims(id, now);
+        let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), now);
         let bearer = encode(&self.header, &bearer_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
         self.blacklist.insert_outstanding(refresh_claims).await?;
         Ok(JwtPair { bearer, refresh })
+    }
+
+    pub async fn status(&self, jti: &Jti) -> JwtStatus {
+        self.blacklist.status(jti).await
     }
 
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {

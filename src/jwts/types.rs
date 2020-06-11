@@ -1,10 +1,17 @@
 use serde::{Serialize, Deserialize};
+use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 use crate::models::base::User;
 
 /// JTI is typed to be a string, since they are sent from the oustide.
 /// The type is provided for better compiler checks.
 pub type Jti = String;
+
+pub fn generate_jti() -> Jti {
+    Uuid::new_v4().to_string()
+}
+
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum TokenType {
@@ -30,4 +37,11 @@ pub struct Claims<U> where U: User {
     pub token_type: TokenType,
     /// Subject of the token -- whom token refers to.  The user id in our case.
     pub sub: U::Id,
+}
+
+pub fn unix_timestamp(time: SystemTime) -> u64 {
+    match time.duration_since(UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
 }

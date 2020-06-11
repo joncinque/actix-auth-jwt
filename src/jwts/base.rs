@@ -4,6 +4,7 @@ use crate::jwts::types::{Jti, Claims};
 use crate::errors::AuthApiError;
 use crate::models::base::User;
 
+#[derive(Debug, PartialEq)]
 pub enum JwtStatus {
     Outstanding,
     Blacklisted,
@@ -19,8 +20,6 @@ pub trait JwtBlacklist<U> where U: User {
     async fn blacklist(&mut self, jti: Jti) -> Result<(), AuthApiError>;
     /// Add the token into the collection of outstanding tokens
     async fn insert_outstanding(&mut self, token: Claims<U>) -> Result<(), AuthApiError>;
-    /// Flush tokens that have been expired for more than a certain amount of time
-    async fn flush_expired(&mut self) -> Result<(), AuthApiError>;
 
     /// Following the creation by config model, blacklists should define some
     /// configuration object from which they can be created.
