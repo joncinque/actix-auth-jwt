@@ -106,12 +106,11 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         decode::<Claims<U>>(&token, &self.decoding_key, &self.validation).map_err(|e| AuthApiError::from(e))
     }
 
-    pub async fn create_token_pair(&mut self, id: &U::Id) -> Result<JwtPair, AuthApiError> {
-        let now = SystemTime::now();
+    pub async fn create_token_pair(&mut self, id: &U::Id, time: SystemTime) -> Result<JwtPair, AuthApiError> {
         let jti = generate_jti();
-        let refresh_claims = self.new_refresh_claims(jti.clone(), id.clone(), now);
+        let refresh_claims = self.new_refresh_claims(jti.clone(), id.clone(), time);
         let refresh = encode(&self.header, &refresh_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
-        let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), now);
+        let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), time);
         let bearer = encode(&self.header, &bearer_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
         self.blacklist.insert_outstanding(refresh_claims).await?;
         Ok(JwtPair { bearer, refresh })
@@ -131,7 +130,8 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         match self.blacklist.status(&jti).await {
             JwtStatus::Outstanding => {
                 self.blacklist.blacklist(jti).await?;
-                self.create_token_pair(&id).await
+                let now = SystemTime::now();
+                self.create_token_pair(&id, now).await
             },
             JwtStatus::NotFound => Err(AuthApiError::NotFound { key: jti }),
             JwtStatus::Blacklisted => Err(AuthApiError::AlreadyUsed),

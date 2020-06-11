@@ -12,6 +12,12 @@ pub fn generate_jti() -> Jti {
     Uuid::new_v4().to_string()
 }
 
+pub fn unix_timestamp(time: SystemTime) -> u64 {
+    match time.duration_since(UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum TokenType {
@@ -37,11 +43,4 @@ pub struct Claims<U> where U: User {
     pub token_type: TokenType,
     /// Subject of the token -- whom token refers to.  The user id in our case.
     pub sub: U::Id,
-}
-
-pub fn unix_timestamp(time: SystemTime) -> u64 {
-    match time.duration_since(UNIX_EPOCH) {
-        Ok(n) => n.as_secs(),
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
 }
