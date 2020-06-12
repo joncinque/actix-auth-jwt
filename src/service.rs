@@ -16,7 +16,6 @@ use crate::dtos::{
     ResetPasswordConfirm,
     UpdatePassword
 };
-use crate::jwts::base::JwtBlacklist;
 use crate::state::AuthState;
 use crate::models::base::{User, Status};
 use crate::repos::base::UserRepo;
@@ -26,9 +25,9 @@ async fn index() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
 
-async fn register<U, R, B>(req: HttpRequest, registration: Json<U::RegisterDto>, data: Data<AuthState<U, R, B>>)
+async fn register<U, R>(req: HttpRequest, registration: Json<U::RegisterDto>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    where U: User, R: UserRepo<U> {
     let registration = registration.into_inner();
     registration.validate().map_err(errors::from_validation_errors)?;
 
@@ -56,9 +55,9 @@ async fn register<U, R, B>(req: HttpRequest, registration: Json<U::RegisterDto>,
     Ok(HttpResponse::Created().body("Success."))
 }
 
-async fn login<U, R, B>(login: Json<LoginUser>, data: Data<AuthState<U, R, B>>)
+async fn login<U, R>(login: Json<LoginUser>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    where U: User, R: UserRepo<U> {
     let login = login.into_inner();
 
     let user_repo = data.user_repo.read().unwrap();
@@ -88,9 +87,9 @@ async fn logout<U: User>() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
 
-async fn register_confirm<U, R, B>(info: Path<ConfirmId>, data: Data<AuthState<U, R, B>>)
+async fn register_confirm<U, R>(info: Path<ConfirmId>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    where U: User, R: UserRepo<U> {
     let mut user_repo = data.user_repo.write().unwrap();
     let info = info.into_inner();
     let id = U::Id::from(info.id);
@@ -100,39 +99,39 @@ async fn register_confirm<U, R, B>(info: Path<ConfirmId>, data: Data<AuthState<U
     }
 }
 
-async fn password_reset_confirm<U, R, B>(
+async fn password_reset_confirm<U, R>(
     info: Path<ConfirmId>,
     reset: Json<ResetPasswordConfirm>,
-    data: Data<AuthState<U, R, B>>) -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    data: Data<AuthState<U, R>>) -> Result<HttpResponse, AuthApiError>
+    where U: User, R: UserRepo<U> {
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-async fn password_reset<U, R, B>(reset: Json<ResetPassword>, data: Data<AuthState<U, R, B>>)
+async fn password_reset<U, R>(reset: Json<ResetPassword>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    where U: User, R: UserRepo<U> {
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-async fn password_update<U, R, B>(reset: Json<UpdatePassword>, data: Data<AuthState<U, R, B>>)
+async fn password_update<U, R>(reset: Json<UpdatePassword>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U>, B: JwtBlacklist<U> {
+    where U: User, R: UserRepo<U> {
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-pub fn auth_service<U, R, B>(scope: Scope) -> Scope
-    where U: User + 'static, R: UserRepo<U> + 'static, B: JwtBlacklist<U> + 'static {
+pub fn auth_service<U, R>(scope: Scope) -> Scope
+    where U: User + 'static, R: UserRepo<U> + 'static, {
     scope.route("/", get().to(index))
-        .route("/register", post().to(register::<U, R, B>))
+        .route("/register", post().to(register::<U, R>))
         .service(
             resource("/register/confirm/{id}")
                 .name("register-confirm")
-                .route(post().to(register_confirm::<U, R, B>)))
-        .route("/login", post().to(login::<U, R, B>))
+                .route(post().to(register_confirm::<U, R>)))
+        .route("/login", post().to(login::<U, R>))
         .route("/logout", post().to(logout::<U>))
-        .route("/password/reset", post().to(password_reset::<U, R, B>))
-        .route("/password/reset/{id}", post().to(password_reset_confirm::<U, R, B>))
-        .route("/password/update", post().to(password_update::<U, R, B>))
+        .route("/password/reset", post().to(password_reset::<U, R>))
+        .route("/password/reset/{id}", post().to(password_reset_confirm::<U, R>))
+        .route("/password/update", post().to(password_update::<U, R>))
 }
 
 #[cfg(test)]
@@ -156,7 +155,6 @@ mod tests {
 
     type RegisterDto = <SimpleUser as User>::RegisterDto;
     type SimpleRepo = InMemoryUserRepo<SimpleUser>;
-    type SimpleBlacklist = InMemoryJwtBlacklist<SimpleUser>;
 
     fn register_dto(email: String, password1: String, password2: String) -> RegisterDto {
         RegisterDto { email, password1, password2, }
@@ -189,14 +187,14 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
         ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -219,14 +217,14 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
         ).await;
         let email = String::from("test@example.com");
         let password1 = String::from("p@ssword1");
@@ -247,14 +245,14 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
         ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ss");
@@ -274,14 +272,14 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
         ).await;
         let email = String::from("test");
         let password = String::from("p@ssword");
@@ -301,21 +299,21 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
         ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let dto = register_dto(email, password.clone(), password.clone());
         {
             let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
+            let _resp = test::call_service(&mut app, req).await;
         }
         {
             let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
@@ -332,15 +330,15 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
         ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -365,15 +363,15 @@ mod tests {
         let transport = state::inmemory_transport();
         let sender = state::test_sender(transport.clone());
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
         ).await;
 
         let email = String::from("test@example.com");
@@ -419,15 +417,15 @@ mod tests {
         let transport = state::inmemory_transport();
         let sender = state::test_sender(transport.clone());
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo, SimpleBlacklist>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo, SimpleBlacklist>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo, SimpleBlacklist>))
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
         ).await;
 
         let email = String::from("test@example.com");

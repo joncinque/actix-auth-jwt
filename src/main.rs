@@ -13,6 +13,7 @@ use actix_auth_jwt::jwts::inmemory::InMemoryJwtBlacklist;
 use actix_auth_jwt::models::simple::SimpleUser;
 use actix_auth_jwt::passwords::PasswordHasherConfig;
 use actix_auth_jwt::repos::inmemory::InMemoryUserRepo;
+use actix_auth_jwt::types::shareable_data;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -46,16 +47,16 @@ async fn main() -> std::io::Result<()> {
             bearer_token_lifetime: Duration::from_secs(60 * 60),
             refresh_token_lifetime: Duration::from_secs(60 * 60 * 24),
         },
-        blacklist: (),
+        blacklist: Box::new(|| shareable_data(SimpleBlacklist::default())),
     };
 
     HttpServer::new(move || {
         App::new()
             .data_factory(
-                app::config_data_factory::<SimpleUser, SimpleRepo, SimpleBlacklist>(config.clone()))
+                app::config_data_factory::<SimpleUser, SimpleRepo>(config.clone()))
             .wrap(Logger::default())
             .wrap(NormalizePath)
-            .configure(app::config_app::<SimpleUser, SimpleRepo, SimpleBlacklist>())
+            .configure(app::config_app::<SimpleUser, SimpleRepo>())
     })
     .bind("127.0.0.1:7878")?
     .run()

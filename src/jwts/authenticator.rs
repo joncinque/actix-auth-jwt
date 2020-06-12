@@ -1,11 +1,12 @@
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
-use std::marker::PhantomData;
 use std::time::{SystemTime, Duration};
 
 use crate::jwts::types::{generate_jti, unix_timestamp, Jti, TokenType, Claims};
 use crate::jwts::base::{JwtBlacklist, JwtStatus};
+use crate::jwts::inmemory::InMemoryJwtBlacklist;
 use crate::errors::AuthApiError;
 use crate::models::base::User;
+use crate::types::{shareable_data, ShareableData};
 
 /// Bearer token is typed to be a string, since they are sent from the oustide.
 /// The type is provided for better compiler checks.
@@ -55,7 +56,7 @@ impl Default for JwtAuthenticatorConfig {
 }
 
 /// Main authenticator used by the services
-pub struct JwtAuthenticator<U: User, B: JwtBlacklist<U>> {
+pub struct JwtAuthenticator<U: User> {
     iss: String,
     header: Header,
     validation: Validation,
@@ -63,13 +64,10 @@ pub struct JwtAuthenticator<U: User, B: JwtBlacklist<U>> {
     refresh_token_lifetime: Duration,
     encoding_key: EncodingKey,
     decoding_key: DecodingKey<'static>,
-    blacklist: B,
-    /// Phantom needed since the type inference doesn't go far
-    /// enough into checking dependent types, mainly User::Id.
-    phantom: PhantomData<U>,
+    blacklist: ShareableData<dyn JwtBlacklist<U>>,
 }
 
-impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
+impl<U> JwtAuthenticator<U> where U: User {
     fn new_refresh_claims(&self, jti: Jti, id: U::Id, time: SystemTime) -> Claims<U> {
         let iat = unix_timestamp(time);
         let exp = unix_timestamp(time + self.refresh_token_lifetime);
@@ -112,12 +110,12 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         let refresh = encode(&self.header, &refresh_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
         let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), time);
         let bearer = encode(&self.header, &bearer_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
-        self.blacklist.insert_outstanding(refresh_claims).await?;
+        self.blacklist.write().unwrap().insert_outstanding(refresh_claims).await?;
         Ok(JwtPair { bearer, refresh })
     }
 
     pub async fn status(&self, jti: &Jti) -> JwtStatus {
-        self.blacklist.status(jti).await
+        self.blacklist.read().unwrap().status(jti).await
     }
 
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {
@@ -127,9 +125,9 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         }
         let jti = data.claims.jti;
         let id = data.claims.sub;
-        match self.blacklist.status(&jti).await {
+        match self.status(&jti).await {
             JwtStatus::Outstanding => {
-                self.blacklist.blacklist(jti).await?;
+                self.blacklist.write().unwrap().blacklist(jti).await?;
                 let now = SystemTime::now();
                 self.create_token_pair(&id, now).await
             },
@@ -138,7 +136,7 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         }
     }
 
-    pub fn from(config: JwtAuthenticatorConfig, blacklist: B) -> Self {
+    pub fn from(config: JwtAuthenticatorConfig, blacklist: ShareableData<dyn JwtBlacklist<U>>) -> Self {
         let iss = config.iss;
         let header = Header::new(config.alg);
         let validation = Validation::new(config.alg);
@@ -147,7 +145,6 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
         let secret = config.secret;
         let encoding_key = EncodingKey::from_secret(secret.as_bytes());
         let decoding_key = DecodingKey::from_secret(secret.as_bytes()).into_static();
-        let phantom = PhantomData::<U>;
         JwtAuthenticator {
             iss,
             header,
@@ -157,7 +154,14 @@ impl<U, B> JwtAuthenticator<U, B> where U: User, B: JwtBlacklist<U> {
             encoding_key,
             decoding_key,
             blacklist,
-            phantom,
         }
+    }
+}
+
+impl<U> Default for JwtAuthenticator<U> where U: User + 'static {
+    fn default() -> Self {
+        let config: JwtAuthenticatorConfig = Default::default();
+        let blacklist: InMemoryJwtBlacklist<U> = Default::default();
+        JwtAuthenticator::from(config, shareable_data(blacklist))
     }
 }
