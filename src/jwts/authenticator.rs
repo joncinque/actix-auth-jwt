@@ -34,11 +34,11 @@ pub struct JwtAuthenticatorConfig {
     pub refresh_token_lifetime: Duration,
 }
 
-impl JwtAuthenticatorConfig {
+impl Default for JwtAuthenticatorConfig {
     /// Convenience function for creating an authenticator with "sensible"
     /// defaults.  NOTE: this is not suitable from production use, since the
     /// JWT signature secret is known.
-    pub fn test() -> Self {
+    fn default() -> Self {
         let iss = String::from("issuer");
         let alg = Algorithm::HS256;
         let secret = String::from("secret");

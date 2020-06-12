@@ -80,7 +80,7 @@ mod tests {
     #[actix_rt::test]
     async fn create_pair() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config.clone(), blacklist);
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
@@ -90,7 +90,7 @@ mod tests {
     #[actix_rt::test]
     async fn decode_bearer_token() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config.clone(), blacklist);
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
@@ -110,7 +110,7 @@ mod tests {
     #[actix_rt::test]
     async fn decode_refresh_token() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config.clone(), blacklist);
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
@@ -130,7 +130,7 @@ mod tests {
     #[actix_rt::test]
     async fn create_multiple_pairs() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
 
@@ -158,7 +158,7 @@ mod tests {
     #[actix_rt::test]
     async fn decode_diff_authenticator() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator1 = JwtAuthenticator::from(config, blacklist);
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
         let config = JwtAuthenticatorConfig {
@@ -181,7 +181,7 @@ mod tests {
     #[actix_rt::test]
     async fn fail_decode_diff_secret() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator1 = JwtAuthenticator::from(config, blacklist);
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
         let config = JwtAuthenticatorConfig {
@@ -202,7 +202,7 @@ mod tests {
     #[actix_rt::test]
     async fn fail_decode_diff_alg() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator1 = JwtAuthenticator::from(config, blacklist);
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
         let config = JwtAuthenticatorConfig {
@@ -223,7 +223,7 @@ mod tests {
     #[actix_rt::test]
     async fn valid_bearer_token_found() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
@@ -238,7 +238,7 @@ mod tests {
     #[actix_rt::test]
     async fn valid_refresh_token_found() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
@@ -253,7 +253,7 @@ mod tests {
     #[actix_rt::test]
     async fn refresh_token_with_blacklist() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
 
@@ -279,7 +279,7 @@ mod tests {
     #[actix_rt::test]
     async fn fail_refresh_using_bearer_token() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
 
@@ -294,7 +294,7 @@ mod tests {
     #[actix_rt::test]
     async fn fail_decode_expired_token() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let config = JwtAuthenticatorConfig {
             iss: String::from("issuer"),
             alg: Algorithm::HS256,
@@ -314,7 +314,7 @@ mod tests {
     #[actix_rt::test]
     async fn random_jti_not_found() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let user_id = SimpleUser::generate_id();
         let status = authenticator.status(&user_id).await;
@@ -324,7 +324,7 @@ mod tests {
     #[actix_rt::test]
     async fn gibberish_token_fails_decode() {
         let mut blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
-        let config = JwtAuthenticatorConfig::test();
+        let config: JwtAuthenticatorConfig = Default::default();
         let mut authenticator = JwtAuthenticator::from(config, blacklist);
         let token = String::from("this_is_a_malformed_jwt");
 

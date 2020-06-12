@@ -40,7 +40,7 @@ pub fn test_sender(transport: ShareableData<EmptyResultTransport>) -> ShareableD
 pub fn test_authenticator<U: User + 'static>() -> ShareableData<JwtAuthenticator<U, InMemoryJwtBlacklist<U>>> {
     let blacklist_config = ();
     let blacklist = <InMemoryJwtBlacklist<U> as JwtBlacklist<U>>::from(&blacklist_config);
-    let auth_config = JwtAuthenticatorConfig::test();
+    let auth_config: JwtAuthenticatorConfig = Default::default();
     shareable_data(JwtAuthenticator::from(auth_config, blacklist))
 }
 
