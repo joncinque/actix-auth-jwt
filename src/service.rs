@@ -145,7 +145,6 @@ mod tests {
     use actix_web::dev::ServiceResponse;
     use regex::Regex;
 
-    use crate::jwts::inmemory::InMemoryJwtBlacklist;
     use crate::models::base::User;
     use crate::models::simple::SimpleUser;
     use crate::repos::inmemory::InMemoryUserRepo;

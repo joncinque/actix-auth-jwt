@@ -1,5 +1,6 @@
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
 use std::time::{SystemTime, Duration};
+use futures::future::LocalBoxFuture;
 
 use crate::jwts::types::{generate_jti, unix_timestamp, Jti, TokenType, Claims};
 use crate::jwts::base::{JwtBlacklist, JwtStatus};
@@ -100,7 +101,7 @@ impl<U> JwtAuthenticator<U> where U: User {
         }
     }
 
-    pub async fn decode(&self, token: String) -> Result<TokenData<Claims<U>>, AuthApiError> {
+    pub fn decode(&self, token: String) -> Result<TokenData<Claims<U>>, AuthApiError> {
         decode::<Claims<U>>(&token, &self.decoding_key, &self.validation).map_err(|e| AuthApiError::from(e))
     }
 
@@ -118,8 +119,12 @@ impl<U> JwtAuthenticator<U> where U: User {
         self.blacklist.read().unwrap().status(jti).await
     }
 
+    pub fn status_static(&self, jti: &Jti) -> LocalBoxFuture<'static, JwtStatus> {
+        self.blacklist.read().unwrap().status_static(jti)
+    }
+
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {
-        let data = self.decode(refresh).await?;
+        let data = self.decode(refresh)?;
         if data.claims.token_type != TokenType::Refresh {
             return Err(AuthApiError::JwtError)
         }

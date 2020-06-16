@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 actix-http = "1.0"
-actix-web = "2.0"
 actix-rt = "1.0"
 actix-service = "1.0"
+actix-web = "2.0"
+actix-web-httpauth = "0.4"
 async-trait = "0.1"
 bson = "0.14"
 dotenv = "0.15"

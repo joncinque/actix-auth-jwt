@@ -19,7 +19,7 @@ pub fn unix_timestamp(time: SystemTime) -> u64 {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TokenType {
     Bearer,
     Refresh,
@@ -29,7 +29,7 @@ pub enum TokenType {
 /// as the second part of the JWT, e.g. if the JWT is "xxxxx.yyyyyy.zzzzzz",
 /// then the claims would be "yyyyyy".
 /// The JTI is used as
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims<U> where U: User {
     /// Unique id for the JWT, used for identification within the blacklist
     pub jti: Jti,

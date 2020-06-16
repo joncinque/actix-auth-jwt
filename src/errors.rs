@@ -30,6 +30,8 @@ pub enum AuthApiError {
     Unauthorized,
     #[fail(display = "Error with JWT")]
     JwtError,
+    #[fail(display = "Configuration error on component: {}", key)]
+    ConfigurationError { key: String },
 }
 
 fn into_str(error: &Vec<ValidationError>) -> String {
@@ -86,6 +88,7 @@ impl ResponseError for AuthApiError {
             AuthApiError::Unauthenticated => StatusCode::UNAUTHORIZED,
             AuthApiError::Unauthorized => StatusCode::FORBIDDEN,
             AuthApiError::JwtError => StatusCode::UNAUTHORIZED,
+            AuthApiError::ConfigurationError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
