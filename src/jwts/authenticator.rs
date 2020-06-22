@@ -26,36 +26,6 @@ pub struct JwtPair {
     pub refresh: RefreshToken,
 }
 
-/// How JWTs will be created and decoded in the system
-#[derive(Clone)]
-pub struct JwtAuthenticatorConfig {
-    pub iss: String,
-    pub alg: Algorithm,
-    pub secret: String,
-    pub bearer_token_lifetime: Duration,
-    pub refresh_token_lifetime: Duration,
-}
-
-impl Default for JwtAuthenticatorConfig {
-    /// Convenience function for creating an authenticator with "sensible"
-    /// defaults.  NOTE: this is not suitable from production use, since the
-    /// JWT signature secret is known.
-    fn default() -> Self {
-        let iss = String::from("issuer");
-        let alg = Algorithm::HS256;
-        let secret = String::from("secret");
-        let bearer_token_lifetime = Duration::from_secs(60 * 60);
-        let refresh_token_lifetime = Duration::from_secs(60 * 60 * 24);
-        JwtAuthenticatorConfig {
-            iss,
-            alg,
-            secret,
-            bearer_token_lifetime,
-            refresh_token_lifetime,
-        }
-    }
-}
-
 /// Main authenticator used by the services
 pub struct JwtAuthenticator<U: User> {
     iss: String,
@@ -141,13 +111,15 @@ impl<U> JwtAuthenticator<U> where U: User {
         }
     }
 
-    pub fn from(config: JwtAuthenticatorConfig, blacklist: ShareableData<dyn JwtBlacklist<U>>) -> Self {
-        let iss = config.iss;
-        let header = Header::new(config.alg);
-        let validation = Validation::new(config.alg);
-        let bearer_token_lifetime = config.bearer_token_lifetime;
-        let refresh_token_lifetime = config.refresh_token_lifetime;
-        let secret = config.secret;
+    pub fn new(
+        iss: String,
+        alg: Algorithm,
+        secret: String,
+        bearer_token_lifetime: Duration,
+        refresh_token_lifetime: Duration,
+        blacklist: ShareableData<dyn JwtBlacklist<U>>) -> Self {
+        let header = Header::new(alg);
+        let validation = Validation::new(alg);
         let encoding_key = EncodingKey::from_secret(secret.as_bytes());
         let decoding_key = DecodingKey::from_secret(secret.as_bytes()).into_static();
         JwtAuthenticator {
@@ -165,8 +137,18 @@ impl<U> JwtAuthenticator<U> where U: User {
 
 impl<U> Default for JwtAuthenticator<U> where U: User + 'static {
     fn default() -> Self {
-        let config: JwtAuthenticatorConfig = Default::default();
+        let iss = String::from("issuer");
+        let alg = Algorithm::HS256;
+        let secret = String::from("secret");
+        let bearer_token_lifetime = Duration::from_secs(60 * 60);
+        let refresh_token_lifetime = Duration::from_secs(60 * 60 * 24);
         let blacklist: InMemoryJwtBlacklist<U> = Default::default();
-        JwtAuthenticator::from(config, shareable_data(blacklist))
+        JwtAuthenticator::new(
+            iss,
+            alg,
+            secret,
+            bearer_token_lifetime,
+            refresh_token_lifetime,
+            shareable_data(blacklist))
     }
 }

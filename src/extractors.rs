@@ -14,7 +14,7 @@ use crate::types::{shareable_data, ShareableData};
 #[derive(Debug)]
 pub struct JwtUserId<U>
     where U: User {
-    user_id: U::Id,
+    pub user_id: U::Id,
 }
 
 #[inline]

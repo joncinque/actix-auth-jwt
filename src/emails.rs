@@ -12,30 +12,8 @@ pub struct EmailSender {
     transport: ShareableData<EmptyResultTransport>,
 }
 
-/// Supported lettre transport types, to be expanded
-#[derive(Clone)]
-pub enum EmailTransportType {
-    InMemory,
-    Stub,
-}
-
-/// Define how to send emails from the app
-#[derive(Clone)]
-pub struct EmailConfig {
-    pub from: String,
-    pub transport_type: EmailTransportType,
-}
-
 impl EmailSender {
     pub fn new(from: String, transport: ShareableData<EmptyResultTransport>) -> Self {
-        EmailSender { from, transport }
-    }
-
-    pub fn from(config: &EmailConfig) -> Self {
-        let transport = match config.transport_type {
-            _ => shareable_data(InMemoryTransport::new_positive())
-        };
-        let from = config.from.clone();
         EmailSender { from, transport }
     }
 
@@ -50,6 +28,14 @@ impl EmailSender {
     }
 }
 
+impl Default for EmailSender {
+    fn default() -> Self {
+        let transport: ShareableData<InMemoryTransport> = shareable_data(Default::default());
+        let from = String::from("admin@example.com");
+        EmailSender { from, transport }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::transports::InMemoryTransport;
@@ -57,12 +43,11 @@ mod tests {
 
     #[actix_rt::test]
     async fn inmemory_sender() {
-        let transport = shareable_data(InMemoryTransport::new_positive());
+        let transport: ShareableData<InMemoryTransport> = shareable_data(Default::default());
         let base_transport: ShareableData<EmptyResultTransport> = transport.clone();
-        let from = String::from("admin@example.com");
+        let mut sender = EmailSender::new(String::from("admin@example.com"), base_transport);
         let to = "test@example.com";
         let body = "Message body!";
-        let mut sender = EmailSender::new(from, base_transport);
         let email = EmailBuilder::new().to(to).body(body);
         sender.send(email).await.unwrap();
 

@@ -14,7 +14,7 @@ pub enum Status {
 }
 
 pub trait User
-    where Self: Serialize + DeserializeOwned + Send + Sync {
+    where Self: Clone + Serialize + DeserializeOwned + Send + Sync {
     type Key: Clone + Eq + Hash + Display + From<String> + Send + Sync;
     type Id: Serialize + DeserializeOwned + Clone + Eq + Hash + Display + From<String> + Send + Sync;
 
@@ -44,7 +44,4 @@ pub trait User
 
     type UpdateDto: DeserializeOwned + Validate;
     fn update(&mut self, update: Self::UpdateDto);
-
-    type UpdatePasswordDto: DeserializeOwned + Validate;
-    fn update_password(&mut self, update_password: Self::UpdatePasswordDto);
 }

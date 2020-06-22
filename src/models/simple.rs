@@ -28,16 +28,6 @@ pub struct UpdateSimpleUser {
     pub email: String,
 }
 
-#[derive(Validate, Deserialize, Serialize)]
-pub struct UpdateSimpleUserPassword {
-    #[validate(email, length(max = 100))]
-    pub email: String,
-    pub old_password: String,
-    #[validate(must_match = "new_password2", length(min = 8, max = 100))]
-    pub new_password1: String,
-    pub new_password2: String,
-}
-
 impl SimpleUser {
     pub fn new(email: String, password: String) -> SimpleUser {
         let userid = Uuid::new_v4().to_string();
@@ -80,9 +70,5 @@ impl User for SimpleUser {
 
     type UpdateDto = UpdateSimpleUser;
     fn update(&mut self, update: Self::UpdateDto) {
-    }
-
-    type UpdatePasswordDto = UpdateSimpleUserPassword;
-    fn update_password(&mut self, update_password: Self::UpdatePasswordDto) {
     }
 }

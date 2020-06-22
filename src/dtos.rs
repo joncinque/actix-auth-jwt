@@ -10,11 +10,11 @@ pub struct LoginUser {
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LoginUserResponse {
-    pub access: String,
+    pub bearer: String,
     pub refresh: String,
-    pub userid: String,
+    pub user_id: String,
 }
 
 #[derive(Validate, Serialize, Deserialize)]

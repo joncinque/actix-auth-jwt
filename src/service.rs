@@ -7,6 +7,7 @@ use actix_web::{
 use actix_web::web::{get, post, resource, Data, Json, Path};
 use lettre_email::EmailBuilder;
 use validator::Validate;
+use std::time::SystemTime;
 
 use crate::dtos::{
     ConfirmId,
@@ -16,6 +17,7 @@ use crate::dtos::{
     ResetPasswordConfirm,
     UpdatePassword
 };
+use crate::extractors::JwtUserId;
 use crate::state::AuthState;
 use crate::models::base::{User, Status};
 use crate::repos::base::UserRepo;
@@ -37,7 +39,7 @@ async fn register<U, R>(req: HttpRequest, registration: Json<U::RegisterDto>, da
         .to(user.email())
         .subject("Confirm email address");
 
-    let hash = (data.hasher)(String::from(user.password())).await?;
+    let hash = (data.hasher.hasher)(String::from(user.password())).await?;
     user.set_password(hash);
 
     {
@@ -62,17 +64,19 @@ async fn login<U, R>(login: Json<LoginUser>, data: Data<AuthState<U, R>>)
 
     let user_repo = data.user_repo.read().unwrap();
     let key = U::Key::from(login.email);
-    let user_option = user_repo.get_by_key(&key).await;
-    match user_option {
+    match user_repo.get_by_key(&key).await {
         None => Err(AuthApiError::NotFound { key: format!("{}", key) }),
         Some(user) => {
             if *user.status() == Status::Confirmed {
-                let verified = (data.verifier)(login.password, String::from(user.password())).await?;
+                let verified = (data.hasher.verifier)(login.password, String::from(user.password())).await?;
                 if verified {
-                    let access = String::from("blah");
-                    let refresh = String::from("blah");
-                    let userid = format!("{}", user.id());
-                    Ok(HttpResponse::Ok().json(LoginUserResponse { access, refresh, userid }))
+                    let mut authenticator = data.authenticator.write().unwrap();
+                    let now = SystemTime::now();
+                    let token_pair = authenticator.create_token_pair(user.id(), now).await?;
+                    let bearer = token_pair.bearer;
+                    let refresh = token_pair.refresh;
+                    let user_id = format!("{}", user.id());
+                    Ok(HttpResponse::Ok().json(LoginUserResponse { bearer, refresh, user_id }))
                 } else {
                     Err(AuthApiError::Unauthenticated)
                 }
@@ -113,10 +117,31 @@ async fn password_reset<U, R>(reset: Json<ResetPassword>, data: Data<AuthState<U
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-async fn password_update<U, R>(reset: Json<UpdatePassword>, data: Data<AuthState<U, R>>)
+async fn password_update<U, R>(reset: Json<UpdatePassword>, user: JwtUserId<U>, data: Data<AuthState<U, R>>)
     -> Result<HttpResponse, AuthApiError>
     where U: User, R: UserRepo<U> {
-    Ok(HttpResponse::Ok().body("Success"))
+    let reset = reset.into_inner();
+    let mut user_repo = data.user_repo.write().unwrap();
+    let id = user.user_id;
+    match user_repo.get_by_id(&id).await {
+        None => Err(AuthApiError::NotFound { key: format!("{}", id) }),
+        Some(user) => {
+            if *user.status() == Status::Confirmed {
+                let verified = (data.hasher.verifier)(reset.old_password, String::from(user.password())).await?;
+                if verified {
+                    let hash = (data.hasher.hasher)(reset.new_password1).await?;
+                    let mut user = user.clone();
+                    user.set_password(hash);
+                    user_repo.update(user).await?;
+                    Ok(HttpResponse::Ok().body("Success"))
+                } else {
+                    Err(AuthApiError::Unauthenticated)
+                }
+            } else {
+                Err(AuthApiError::Unconfirmed { key: format!("{}", id) })
+            }
+        }
+    }
 }
 
 pub fn auth_service<U, R>(scope: Scope) -> Scope
@@ -141,13 +166,15 @@ mod tests {
         App,
     };
     use actix_web::http::StatusCode;
-    use actix_web::dev::Body;
-    use actix_web::dev::ServiceResponse;
+    use actix_web::dev::{Body, MessageBody, ServiceResponse};
     use regex::Regex;
+    use serde::de::DeserializeOwned;
 
     use crate::models::base::User;
     use crate::models::simple::SimpleUser;
     use crate::repos::inmemory::InMemoryUserRepo;
+    use crate::transports::InMemoryTransport;
+    use crate::types::ShareableData;
     use crate::state;
 
     use super::*;
@@ -166,10 +193,81 @@ mod tests {
         }
     }
 
+    async fn read_body_json<B, T>(res: ServiceResponse<B>) -> T
+    where B: MessageBody + Unpin, T: DeserializeOwned,
+    {
+        let body = test::read_body(res).await;
+        serde_json::from_slice(&body)
+            .unwrap_or_else(|_| panic!("read_body_json failed during deserialization"))
+    }
+
     fn get_confirmation_url(message: &String) -> &str {
         let re = Regex::new(r"http://\S+").unwrap();
         let m = re.find(&message).unwrap();
         m.as_str()
+    }
+
+    async fn register_user(
+        email: &str,
+        password1: &str,
+        password2: &str,
+        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
+                .service(
+                    resource("/register/confirm/{id}")
+                        .name("register-confirm")
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+        ).await;
+        let dto = register_dto(email.to_owned(), password1.to_owned(), password2.to_owned());
+        let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn confirm_user(
+        email: &str,
+        transport: ShareableData<InMemoryTransport>,
+        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state.clone())
+                .service(
+                    resource("/register/confirm/{id}")
+                        .name("register-confirm")
+                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+        ).await;
+
+        let message;
+        {
+            let confirmation = transport.write().unwrap().emails.remove(0);
+            let tos = confirmation.envelope().to().to_vec();
+            assert_eq!(tos.len(), 1);
+            let to = format!("{}", tos[0]);
+            assert_eq!(&to, email);
+            let from = format!("{}", confirmation.envelope().from().unwrap());
+            assert_eq!(&from, "admin@example.com");
+            message = confirmation.message_to_string().unwrap();
+            println!("{}", &message);
+        }
+
+        let url = get_confirmation_url(&message);
+        let req = test::TestRequest::post().uri(url).to_request();
+        let resp = test::call_service(&mut app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        resp
+    }
+
+    async fn login_user(
+        email: &str,
+        password: &str,
+        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
+        ).await;
+        let dto = LoginUser { email: email.to_owned(), password: password.to_owned() };
+        let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
     }
 
     #[actix_rt::test]
@@ -187,22 +285,10 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-        ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
-        {
-            let dto = register_dto(email.clone(), password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::CREATED);
-        }
+        let resp = register_user(&email, &password, &password, state).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
         {
             let user_repo = user_repo.read().unwrap();
             let user = user_repo.get_by_key(&email).await.unwrap();
@@ -217,25 +303,13 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-        ).await;
         let email = String::from("test@example.com");
         let password1 = String::from("p@ssword1");
         let password2 = String::from("p@ssword2");
-        {
-            let dto = register_dto(email, password1, password2);
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            let body = get_body(&resp);
-            assert!(body.contains("password1"));
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        let resp = register_user(&email, &password1, &password2, state).await;
+        let body = get_body(&resp);
+        assert!(body.contains("password1"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -245,24 +319,12 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-        ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ss");
-        {
-            let dto = register_dto(email, password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            let body = get_body(&resp);
-            assert!(body.contains("password1"));
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        let resp = register_user(&email, &password, &password, state).await;
+        let body = get_body(&resp);
+        assert!(body.contains("password1"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -272,24 +334,12 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-        ).await;
         let email = String::from("test");
         let password = String::from("p@ssword");
-        {
-            let dto = register_dto(email, password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            let body = get_body(&resp);
-            assert!(body.contains("email"));
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        let resp = register_user(&email, &password, &password, state).await;
+        let body = get_body(&resp);
+        assert!(body.contains("email"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -299,28 +349,13 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-        ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
-        let dto = register_dto(email, password.clone(), password.clone());
-        {
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let _resp = test::call_service(&mut app, req).await;
-        }
-        {
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            let body = get_body(&resp);
-            assert!(body.contains("User already exists: test@example.com"));
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        let resp = register_user(&email, &password, &password, state).await;
+        let body = get_body(&resp);
+        assert!(body.contains("User already exists: test@example.com"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -330,30 +365,12 @@ mod tests {
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
-        ).await;
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
-        {
-            let dto = register_dto(email.clone(), password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::CREATED);
-        }
-
-        {
-            let dto = LoginUser { email, password };
-            let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = login_user(&email, &password, state).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_rt::test]
@@ -363,51 +380,14 @@ mod tests {
         let sender = state::test_sender(transport.clone());
         let auth = state::test_authenticator();
         let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
-        ).await;
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
-        {
-            let dto = register_dto(email.clone(), password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::CREATED);
-        }
-
-        let message;
-        {
-            let confirmation = transport.write().unwrap().emails.remove(0);
-            let tos = confirmation.envelope().to().to_vec();
-            assert_eq!(tos.len(), 1);
-            let to = format!("{}", tos[0]);
-            assert_eq!(&to, &email);
-            let from = format!("{}", confirmation.envelope().from().unwrap());
-            assert_eq!(&from, "admin@example.com");
-            message = confirmation.message_to_string().unwrap();
-            println!("{}", &message);
-        }
-
-        let url = get_confirmation_url(&message);
-        {
-            let req = test::TestRequest::post().uri(url).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::OK);
-        }
-
-        {
-            let dto = LoginUser { email, password };
-            let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::OK);
-        }
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        let resp = login_user(&email, &password, state.clone()).await;
+        let result: LoginUserResponse = read_body_json(resp).await;
+        assert_ne!(result.user_id, String::from(""));
     }
 
     #[actix_rt::test]

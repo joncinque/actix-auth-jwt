@@ -24,8 +24,10 @@ impl InMemoryTransport {
             response,
         }
     }
+}
 
-    pub fn new_positive() -> Self {
+impl Default for InMemoryTransport {
+    fn default() -> Self {
         Self::new(Ok(()))
     }
 }
