@@ -41,13 +41,19 @@ which handles how to create the main components:
 InMemory are exposed for testing
 * `PasswordHasher`: for now, just the secret key for the argon2 password hasher
 and verifier
-* `JwtBlacklist`: where blacklisted tokens are stored, allowing to store, check,
-blacklist, and flush tokens
 * `JwtAuthenticator`: configure how to create the JWT pair, e.g. token
-lifetimes, hashing secret
+lifetimes, hashing secret, along with an associated blacklist
 
-All components have a `from` function which takes their configuration type,
-giving instructions on how to create the component.
+All components are created on the fly in `data_factory` on actix's `App` using
+provided closures.  Note that they must wrapped in an `Arc` to allow for `Sync`
+and `Send`, and also wrapped in a `Box` for `Sized`.
+
+Additionally, each of the types created must be wrapped in an `Arc` and 
+`RwLock`, to allow for safe mutation in different threads and async contexts.
+The `ShareableData` type and its constructor `shareable_data()` are provided as
+easy wrappers.
+
+See the `examples` for example configurations.
 
 ### User
 
@@ -81,12 +87,11 @@ More information can be found at this excellent
 ## Prereqs
 
 * Rust 1.42
-* MongoDB 4.2
 
 ## Dependencies
 
 * `actix-web`, `actix-http`, `actix-rt`: all main actix components
-* `mongodb`, `bson`: requirements for db interaction
+* `bson`: requirements for user serialization / deserialization into MongoDB
 * `dotenv`, `dotenv-codegen`: managing production secrets
 * `log`, `env_logger`: easy logging to stdout
 * `serde`, `serde_json`: easy (de)serialization of structs
@@ -107,19 +112,12 @@ HASHER_SECRET_KEY=
 JWT_SECRET_KEY=
 JWT_ISS=
 FROM_EMAIL=
-MONGO_URI=
-MONGO_DB=
-MONGO_COLLECTION=
 ```
 * `HASHER_SECRET_KEY`: randomly generated string of letters and numbers,
 used for hashing user passwords
 * `JWT_SECRET_KEY`: randomly generated string of letters and numbers, used for
 * `JWT_ISS`: issuer for the JWT
 * `FROM_EMAIL`: valid email address used for sending emails to users
-* `MONGO_URI`: uri of mongo instance, can use the full uri spec including
-user / password / auth db
-* `MONGO_DB`: db name
-* `MONGO_COLLECTION`: collection name for storing users
 
 ## Testing
 
@@ -127,18 +125,19 @@ user / password / auth db
 
 ## TODO Items
 
-* Expose all `lettre` transports in EmailConfig
+* Add MongoDB support along with `MONGO_URI`, `MONGO_DB`, and `MONGO_COLLECTION`
+environment variables for configuration
 * Expose more password hashers
-* Update `lettre` to version 1 or 0.10 with new email builder
+* Expose all `lettre` transports
+* Update `lettre` to version 0.10 with new email builder
 * Transition `lettre` email sending to async once tokio is supported
 * Update password hashing to async, which is currently very slow
 * Use `tokio::sync::RwLock` instead of a normal `RwLock` once they no longer
-require `Sized`
-* Add simplest example for using provided types
+require `Sized`, see [GitHub issue](https://github.com/tokio-rs/tokio/issues/2209)
 * Add example with customized `AppConfig`
 * Add example with customized `User` type and user update routes
 * Add example with customized `UserRepo` for another database provider
 * Make `JwtPair` generic for different token types (sliding, access-only, etc)
 * Add Redis `UserRepo` implementation
 * Add Diesel `UserRepo` implementation
-* Break out different database implementations into features
+* Break out different database implementations into crate features
