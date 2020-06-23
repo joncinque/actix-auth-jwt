@@ -8,17 +8,13 @@ use crate::types::{shareable_data, ShareableData};
 /// not needing to parametrize every single function by the transport's Result
 /// type.
 pub struct EmailSender {
-    from: String,
-    transport: ShareableData<EmptyResultTransport>,
+    pub from: String,
+    pub transport: ShareableData<EmptyResultTransport>,
 }
 
 impl EmailSender {
     pub fn new(from: String, transport: ShareableData<EmptyResultTransport>) -> Self {
         EmailSender { from, transport }
-    }
-
-    pub fn set_transport(&mut self, transport: ShareableData<EmptyResultTransport>) {
-        self.transport = transport;
     }
 
     /// Main send function.  Note that this isn't actually async at the moment!

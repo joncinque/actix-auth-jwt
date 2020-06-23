@@ -165,7 +165,7 @@ mod tests {
         test,
         App,
     };
-    use actix_web::http::StatusCode;
+    use actix_web::http::{StatusCode, header};
     use actix_web::dev::{Body, MessageBody, ServiceResponse};
     use regex::Regex;
     use serde::de::DeserializeOwned;
@@ -174,7 +174,6 @@ mod tests {
     use crate::models::simple::SimpleUser;
     use crate::transports::InMemoryTransport;
     use crate::types::{ShareableData, shareable_data};
-    use crate::state::AuthState;
 
     use super::*;
 
@@ -245,7 +244,6 @@ mod tests {
             let from = format!("{}", confirmation.envelope().from().unwrap());
             assert_eq!(&from, "admin@example.com");
             message = confirmation.message_to_string().unwrap();
-            println!("{}", &message);
         }
 
         let url = get_confirmation_url(&message);
@@ -265,6 +263,30 @@ mod tests {
         ).await;
         let dto = LoginUser { email: email.to_owned(), password: password.to_owned() };
         let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn update_password(
+        bearer: &str,
+        old_password: &str,
+        new_password1: &str,
+        new_password2: &str,
+        state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new()
+                .app_data(state.extractor.clone())
+                .data(state)
+                .route("/password/update", post().to(password_update::<SimpleUser>))
+        ).await;
+        let dto = UpdatePassword {
+            old_password: old_password.to_owned(),
+            new_password1: new_password1.to_owned(),
+            new_password2: new_password2.to_owned(),
+        };
+        let req = test::TestRequest::post()
+            .uri("/password/update")
+            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .set_json(&dto).to_request();
         test::call_service(&mut app, req).await
     }
 
@@ -354,7 +376,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().set_transport(transport.clone());
+        sender.write().unwrap().transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -366,6 +388,8 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let result: LoginUserResponse = read_body_json(resp).await;
         assert_ne!(result.user_id, String::from(""));
+        assert_ne!(result.bearer, String::from(""));
+        assert_ne!(result.refresh, String::from(""));
     }
 
     #[actix_rt::test]
@@ -373,7 +397,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().set_transport(transport.clone());
+        sender.write().unwrap().transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -383,5 +407,28 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let resp = login_user(&email, "notp@ssword", state.clone()).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_rt::test]
+    async fn update_password_header() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let result: LoginUserResponse = read_body_json(resp).await;
+        let new_password = String::from("newp@ass!");
+        let resp = update_password(&result.bearer, &password, &new_password, &new_password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &new_password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 }
