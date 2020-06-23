@@ -17,6 +17,10 @@ impl EmailSender {
         EmailSender { from, transport }
     }
 
+    pub fn set_transport(&mut self, transport: ShareableData<EmptyResultTransport>) {
+        self.transport = transport;
+    }
+
     /// Main send function.  Note that this isn't actually async at the moment!
     pub async fn send(&mut self, builder: EmailBuilder) -> Result<(), AuthApiError> {
         let email = builder

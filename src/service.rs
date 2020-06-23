@@ -173,8 +173,8 @@ mod tests {
     use crate::models::base::User;
     use crate::models::simple::SimpleUser;
     use crate::transports::InMemoryTransport;
-    use crate::types::ShareableData;
-    use crate::state;
+    use crate::types::{ShareableData, shareable_data};
+    use crate::state::AuthState;
 
     use super::*;
 
@@ -278,11 +278,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn post_register() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
+        let user_repo = state.user_repo.clone();
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state).await;
@@ -296,11 +293,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_register_password_validation() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
         let email = String::from("test@example.com");
         let password1 = String::from("p@ssword1");
         let password2 = String::from("p@ssword2");
@@ -312,11 +305,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_register_password_short() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
         let email = String::from("test@example.com");
         let password = String::from("p@ss");
         let resp = register_user(&email, &password, &password, state).await;
@@ -327,11 +316,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_register_invalid_email() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
         let email = String::from("test");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state).await;
@@ -342,14 +327,11 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_register_same_email() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
         let resp = register_user(&email, &password, &password, state).await;
         let body = get_body(&resp);
         assert!(body.contains("User already exists: test@example.com"));
@@ -358,11 +340,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn fail_post_login_unconfirmed() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::stub_transport();
-        let sender = state::test_sender(transport);
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
@@ -373,73 +351,37 @@ mod tests {
 
     #[actix_rt::test]
     async fn post_login() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::inmemory_transport();
-        let sender = state::test_sender(transport.clone());
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().set_transport(transport.clone());
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
         let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
         let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
         let result: LoginUserResponse = read_body_json(resp).await;
         assert_ne!(result.user_id, String::from(""));
     }
 
     #[actix_rt::test]
     async fn fail_post_login_wrong_password() {
-        let user_repo = state::inmemory_repo();
-        let transport = state::inmemory_transport();
-        let sender = state::test_sender(transport.clone());
-        let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
-        let mut app = test::init_service(
-            App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser>))
-                .service(
-                    resource("/register/confirm/{id}")
-                        .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser>)))
-                .route("/login", post().to(login::<SimpleUser>))
-        ).await;
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().set_transport(transport.clone());
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
-        {
-            let dto = register_dto(email.clone(), password.clone(), password.clone());
-            let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::CREATED);
-        }
-
-        let message;
-        {
-            let confirmation = transport.write().unwrap().emails.remove(0);
-            let tos = confirmation.envelope().to().to_vec();
-            assert_eq!(tos.len(), 1);
-            let to = format!("{}", tos[0]);
-            assert_eq!(&to, &email);
-            let from = format!("{}", confirmation.envelope().from().unwrap());
-            assert_eq!(&from, "admin@example.com");
-            message = confirmation.message_to_string().unwrap();
-            println!("{}", &message);
-        }
-
-        let url = get_confirmation_url(&message);
-        {
-            let req = test::TestRequest::post().uri(url).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::OK);
-        }
-
-        {
-            let password = String::from("notp@assword");
-            let dto = LoginUser { email, password };
-            let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
-            let resp = test::call_service(&mut app, req).await;
-            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-        }
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, "notp@ssword", state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 }
