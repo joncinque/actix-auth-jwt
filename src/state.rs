@@ -11,19 +11,19 @@ use crate::transports::{EmptyResultTransport, InMemoryTransport};
 use crate::types::{shareable_data, ShareableData};
 use crate::extractors::JwtUserIdConfig;
 
-pub struct AuthState<U, R>
-where U: User + 'static, R: UserRepo<U> {
-    pub user_repo: ShareableData<R>,
+pub struct AuthState<U>
+where U: User + 'static {
+    pub user_repo: ShareableData<dyn UserRepo<U>>,
     pub hasher: Arc<PasswordHasher>,
     pub sender: ShareableData<EmailSender>,
     pub authenticator: ShareableData<JwtAuthenticator<U>>,
     pub extractor: JwtUserIdConfig<U>,
 }
 
-impl<U, R> Clone for AuthState<U, R>
-where U: User + 'static, R: UserRepo<U> {
+impl<U> Clone for AuthState<U>
+where U: User + 'static {
     fn clone(&self) -> Self {
-        AuthState::<U, R> {
+        AuthState::<U> {
             user_repo: self.user_repo.clone(),
             hasher: self.hasher.clone(),
             sender: self.sender.clone(),
@@ -53,11 +53,11 @@ pub fn test_authenticator<U: User + 'static>() -> ShareableData<JwtAuthenticator
     shareable_data(JwtAuthenticator::default())
 }
 
-pub fn state<U, R>(
-    user_repo: ShareableData<R>,
+pub fn state<U>(
+    user_repo: ShareableData<dyn UserRepo<U>>,
     sender: ShareableData<EmailSender>,
-    authenticator: ShareableData<JwtAuthenticator<U>>) -> AuthState<U, R>
-    where U: User, R: UserRepo<U>, {
+    authenticator: ShareableData<JwtAuthenticator<U>>) -> AuthState<U>
+    where U: User {
     let hasher: Arc<PasswordHasher> = Arc::new(Default::default());
     let extractor = JwtUserIdConfig::<U> { authenticator: authenticator.clone() };
     AuthState { user_repo, hasher, sender, authenticator, extractor }

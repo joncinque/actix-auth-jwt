@@ -22,7 +22,6 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_mongo=debug,actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    type SimpleRepo = InMemoryUserRepo<SimpleUser>;
     type SimpleBlacklist = InMemoryJwtBlacklist<SimpleUser>;
 
     env_logger::init();
@@ -60,10 +59,10 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data_factory(
-                app::config_data_factory::<SimpleUser, SimpleRepo>(config.clone()))
+                app::config_data_factory::<SimpleUser>(config.clone()))
             .wrap(Logger::default())
             .wrap(NormalizePath)
-            .configure(app::config_app::<SimpleUser, SimpleRepo>())
+            .configure(app::config_app::<SimpleUser>())
     })
     .bind("127.0.0.1:7878")?
     .run()

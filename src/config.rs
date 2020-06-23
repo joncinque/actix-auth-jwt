@@ -12,22 +12,18 @@ use crate::types::ShareableData;
 /// creation of all components whenever required by Actix.
 pub type ShareableClosure<T> = Arc<Box<dyn Fn() -> T + Send + Sync + 'static>>;
 
-pub struct AppConfig<U, R>
-    where
-        U: User,
-        R: UserRepo<U>, {
-    pub user_repo: ShareableClosure<ShareableData<R>>,
+pub struct AppConfig<U>
+    where U: User, {
+    pub user_repo: ShareableClosure<ShareableData<dyn UserRepo<U>>>,
     pub sender: ShareableClosure<ShareableData<EmailSender>>,
     pub hasher: ShareableClosure<Arc<PasswordHasher>>,
     pub authenticator: ShareableClosure<ShareableData<JwtAuthenticator<U>>>,
 }
 
 /// Manually implement Clone to satisfy moving AppConfig into async domains
-impl<U, R> Clone for AppConfig<U, R>
-    where
-        U: User,
-        R: UserRepo<U>, {
-    fn clone(&self) -> AppConfig<U, R> {
+impl<U> Clone for AppConfig<U>
+    where U: User, {
+    fn clone(&self) -> AppConfig<U> {
         AppConfig {
             user_repo: self.user_repo.clone(),
             sender: self.sender.clone(),

@@ -27,9 +27,9 @@ async fn index() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
 
-async fn register<U, R>(req: HttpRequest, registration: Json<U::RegisterDto>, data: Data<AuthState<U, R>>)
+async fn register<U>(req: HttpRequest, registration: Json<U::RegisterDto>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    where U: User, {
     let registration = registration.into_inner();
     registration.validate().map_err(errors::from_validation_errors)?;
 
@@ -57,9 +57,9 @@ async fn register<U, R>(req: HttpRequest, registration: Json<U::RegisterDto>, da
     Ok(HttpResponse::Created().body("Success."))
 }
 
-async fn login<U, R>(login: Json<LoginUser>, data: Data<AuthState<U, R>>)
+async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    where U: User, {
     let login = login.into_inner();
 
     let user_repo = data.user_repo.read().unwrap();
@@ -91,9 +91,9 @@ async fn logout<U: User>() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
 
-async fn register_confirm<U, R>(info: Path<ConfirmId>, data: Data<AuthState<U, R>>)
+async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    where U: User, {
     let mut user_repo = data.user_repo.write().unwrap();
     let info = info.into_inner();
     let id = U::Id::from(info.id);
@@ -103,23 +103,23 @@ async fn register_confirm<U, R>(info: Path<ConfirmId>, data: Data<AuthState<U, R
     }
 }
 
-async fn password_reset_confirm<U, R>(
+async fn password_reset_confirm<U>(
     info: Path<ConfirmId>,
     reset: Json<ResetPasswordConfirm>,
-    data: Data<AuthState<U, R>>) -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    data: Data<AuthState<U>>) -> Result<HttpResponse, AuthApiError>
+    where U: User, {
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-async fn password_reset<U, R>(reset: Json<ResetPassword>, data: Data<AuthState<U, R>>)
+async fn password_reset<U>(reset: Json<ResetPassword>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    where U: User, {
     Ok(HttpResponse::Ok().body("Success"))
 }
 
-async fn password_update<U, R>(reset: Json<UpdatePassword>, user: JwtUserId<U>, data: Data<AuthState<U, R>>)
+async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
-    where U: User, R: UserRepo<U> {
+    where U: User, {
     let reset = reset.into_inner();
     let mut user_repo = data.user_repo.write().unwrap();
     let id = user.user_id;
@@ -144,19 +144,19 @@ async fn password_update<U, R>(reset: Json<UpdatePassword>, user: JwtUserId<U>, 
     }
 }
 
-pub fn auth_service<U, R>(scope: Scope) -> Scope
-    where U: User + 'static, R: UserRepo<U> + 'static, {
+pub fn auth_service<U>(scope: Scope) -> Scope
+    where U: User + 'static, {
     scope.route("/", get().to(index))
-        .route("/register", post().to(register::<U, R>))
+        .route("/register", post().to(register::<U>))
         .service(
             resource("/register/confirm/{id}")
                 .name("register-confirm")
-                .route(post().to(register_confirm::<U, R>)))
-        .route("/login", post().to(login::<U, R>))
+                .route(post().to(register_confirm::<U>)))
+        .route("/login", post().to(login::<U>))
         .route("/logout", post().to(logout::<U>))
-        .route("/password/reset", post().to(password_reset::<U, R>))
-        .route("/password/reset/{id}", post().to(password_reset_confirm::<U, R>))
-        .route("/password/update", post().to(password_update::<U, R>))
+        .route("/password/reset", post().to(password_reset::<U>))
+        .route("/password/reset/{id}", post().to(password_reset_confirm::<U>))
+        .route("/password/update", post().to(password_update::<U>))
 }
 
 #[cfg(test)]
@@ -172,7 +172,6 @@ mod tests {
 
     use crate::models::base::User;
     use crate::models::simple::SimpleUser;
-    use crate::repos::inmemory::InMemoryUserRepo;
     use crate::transports::InMemoryTransport;
     use crate::types::ShareableData;
     use crate::state;
@@ -180,7 +179,6 @@ mod tests {
     use super::*;
 
     type RegisterDto = <SimpleUser as User>::RegisterDto;
-    type SimpleRepo = InMemoryUserRepo<SimpleUser>;
 
     fn register_dto(email: String, password1: String, password2: String) -> RegisterDto {
         RegisterDto { email, password1, password2, }
@@ -211,14 +209,14 @@ mod tests {
         email: &str,
         password1: &str,
         password2: &str,
-        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        state: AuthState<SimpleUser>) -> ServiceResponse {
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
+                .route("/register", post().to(register::<SimpleUser>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+                        .route(post().to(register_confirm::<SimpleUser>)))
         ).await;
         let dto = register_dto(email.to_owned(), password1.to_owned(), password2.to_owned());
         let req = test::TestRequest::post().uri("/register").set_json(&dto).to_request();
@@ -228,13 +226,13 @@ mod tests {
     async fn confirm_user(
         email: &str,
         transport: ShareableData<InMemoryTransport>,
-        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        state: AuthState<SimpleUser>) -> ServiceResponse {
         let mut app = test::init_service(
             App::new().data(state.clone())
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
+                        .route(post().to(register_confirm::<SimpleUser>)))
         ).await;
 
         let message;
@@ -260,10 +258,10 @@ mod tests {
     async fn login_user(
         email: &str,
         password: &str,
-        state: AuthState<SimpleUser, SimpleRepo>) -> ServiceResponse {
+        state: AuthState<SimpleUser>) -> ServiceResponse {
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
+                .route("/login", post().to(login::<SimpleUser>))
         ).await;
         let dto = LoginUser { email: email.to_owned(), password: password.to_owned() };
         let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
@@ -284,7 +282,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state).await;
@@ -302,7 +300,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test@example.com");
         let password1 = String::from("p@ssword1");
         let password2 = String::from("p@ssword2");
@@ -318,7 +316,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test@example.com");
         let password = String::from("p@ss");
         let resp = register_user(&email, &password, &password, state).await;
@@ -333,7 +331,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state).await;
@@ -348,7 +346,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
@@ -364,7 +362,7 @@ mod tests {
         let transport = state::stub_transport();
         let sender = state::test_sender(transport);
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
@@ -379,7 +377,7 @@ mod tests {
         let transport = state::inmemory_transport();
         let sender = state::test_sender(transport.clone());
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -396,15 +394,15 @@ mod tests {
         let transport = state::inmemory_transport();
         let sender = state::test_sender(transport.clone());
         let auth = state::test_authenticator();
-        let state = state::state::<SimpleUser, SimpleRepo>(user_repo.clone(), sender.clone(), auth.clone());
+        let state = state::state::<SimpleUser>(user_repo.clone(), sender.clone(), auth.clone());
         let mut app = test::init_service(
             App::new().data(state)
-                .route("/register", post().to(register::<SimpleUser, SimpleRepo>))
+                .route("/register", post().to(register::<SimpleUser>))
                 .service(
                     resource("/register/confirm/{id}")
                         .name("register-confirm")
-                        .route(post().to(register_confirm::<SimpleUser, SimpleRepo>)))
-                .route("/login", post().to(login::<SimpleUser, SimpleRepo>))
+                        .route(post().to(register_confirm::<SimpleUser>)))
+                .route("/login", post().to(login::<SimpleUser>))
         ).await;
 
         let email = String::from("test@example.com");
