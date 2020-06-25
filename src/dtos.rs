@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 use validator_derive::Validate;
 
+use crate::models::base::User;
+
 #[derive(Serialize, Deserialize)]
 pub struct LoginUser {
-    pub email: String,
+    pub key: String,
     pub password: String,
 }
 
@@ -27,7 +29,7 @@ pub struct UpdatePassword {
 
 #[derive(Serialize, Deserialize)]
 pub struct ResetPassword {
-    pub email: String,
+    pub key: String,
 }
 
 #[derive(Serialize, Deserialize)]

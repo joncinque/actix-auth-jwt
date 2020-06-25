@@ -63,27 +63,19 @@ async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
     let login = login.into_inner();
 
     let user_repo = data.user_repo.read().unwrap();
-    let key = U::Key::from(login.email);
-    match user_repo.get_by_key(&key).await {
-        None => Err(AuthApiError::NotFound { key: format!("{}", key) }),
-        Some(user) => {
-            if *user.status() == Status::Confirmed {
-                let verified = (data.hasher.verifier)(login.password, String::from(user.password())).await?;
-                if verified {
-                    let mut authenticator = data.authenticator.write().unwrap();
-                    let now = SystemTime::now();
-                    let token_pair = authenticator.create_token_pair(user.id(), now).await?;
-                    let bearer = token_pair.bearer;
-                    let refresh = token_pair.refresh;
-                    let user_id = format!("{}", user.id());
-                    Ok(HttpResponse::Ok().json(LoginUserResponse { bearer, refresh, user_id }))
-                } else {
-                    Err(AuthApiError::Unauthenticated)
-                }
-            } else {
-                Err(AuthApiError::Unconfirmed { key: format!("{}", key) })
-            }
-        }
+    let key = U::Key::from(login.key);
+    let user = user_repo.get_by_key(&key).await?;
+    let verified = (data.hasher.verifier)(login.password, String::from(user.password())).await?;
+    if verified {
+        let mut authenticator = data.authenticator.write().unwrap();
+        let now = SystemTime::now();
+        let token_pair = authenticator.create_token_pair(user.id(), now).await?;
+        let bearer = token_pair.bearer;
+        let refresh = token_pair.refresh;
+        let user_id = format!("{}", user.id());
+        Ok(HttpResponse::Ok().json(LoginUserResponse { bearer, refresh, user_id }))
+    } else {
+        Err(AuthApiError::Unauthenticated)
     }
 }
 
@@ -97,10 +89,7 @@ async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
     let mut user_repo = data.user_repo.write().unwrap();
     let info = info.into_inner();
     let id = U::Id::from(info.id);
-    match user_repo.confirm(&id).await {
-        Ok(_) => Ok(HttpResponse::Ok().body("Success")),
-        Err(e) => Err(e),
-    }
+    user_repo.confirm(&id).await.map(|_| HttpResponse::Ok().body("Success"))
 }
 
 async fn password_reset_confirm<U>(
@@ -121,26 +110,19 @@ async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, dat
     -> Result<HttpResponse, AuthApiError>
     where U: User, {
     let reset = reset.into_inner();
+    reset.validate().map_err(errors::from_validation_errors)?;
     let mut user_repo = data.user_repo.write().unwrap();
     let id = user.user_id;
-    match user_repo.get_by_id(&id).await {
-        None => Err(AuthApiError::NotFound { key: format!("{}", id) }),
-        Some(user) => {
-            if *user.status() == Status::Confirmed {
-                let verified = (data.hasher.verifier)(reset.old_password, String::from(user.password())).await?;
-                if verified {
-                    let hash = (data.hasher.hasher)(reset.new_password1).await?;
-                    let mut user = user.clone();
-                    user.set_password(hash);
-                    user_repo.update(user).await?;
-                    Ok(HttpResponse::Ok().body("Success"))
-                } else {
-                    Err(AuthApiError::Unauthenticated)
-                }
-            } else {
-                Err(AuthApiError::Unconfirmed { key: format!("{}", id) })
-            }
-        }
+    let user = user_repo.get_by_id(&id).await?;
+    let verified = (data.hasher.verifier)(reset.old_password, String::from(user.password())).await?;
+    if verified {
+        let hash = (data.hasher.hasher)(reset.new_password1).await?;
+        let mut user = user.clone();
+        user.set_password(hash);
+        user_repo.update(user).await?;
+        Ok(HttpResponse::Ok().body("Success"))
+    } else {
+        Err(AuthApiError::Unauthenticated)
     }
 }
 
@@ -261,7 +243,7 @@ mod tests {
             App::new().data(state)
                 .route("/login", post().to(login::<SimpleUser>))
         ).await;
-        let dto = LoginUser { email: email.to_owned(), password: password.to_owned() };
+        let dto = LoginUser { key: email.to_owned(), password: password.to_owned() };
         let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
         test::call_service(&mut app, req).await
     }
@@ -308,8 +290,8 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::CREATED);
         {
             let user_repo = user_repo.read().unwrap();
-            let user = user_repo.get_by_key(&email).await.unwrap();
-            assert_ne!(user.password, password);
+            let err = user_repo.get_by_key(&email).await.unwrap_err();
+            assert!(matches!(err, AuthApiError::Unconfirmed { .. } ));
         }
     }
 
@@ -430,5 +412,65 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let resp = login_user(&email, &new_password, state.clone()).await;
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn fail_update_password_no_header() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let new_password = String::from("newp@ass!");
+        let resp = update_password("Bearer blah.blah.blah", &password, &new_password, &new_password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_rt::test]
+    async fn fail_update_password_wrong_password2() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let result: LoginUserResponse = read_body_json(resp).await;
+        let resp = update_password(&result.bearer, &password, "newp@ass!", "othernewpass!", state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn fail_update_password_wrong_old_password() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let result: LoginUserResponse = read_body_json(resp).await;
+        let new_password = String::from("newp@ass!");
+        let resp = update_password(&result.bearer, "somethingelse", &new_password, &new_password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 }
