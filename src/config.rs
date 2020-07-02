@@ -12,6 +12,8 @@ use crate::types::ShareableData;
 /// creation of all components whenever required by Actix.
 pub type ShareableClosure<T> = Arc<Box<dyn Fn() -> T + Send + Sync + 'static>>;
 
+/// Struct explaining how to create the state of the App, provided through
+/// closures.  See examples for how to do this.
 pub struct AppConfig<U>
     where U: User, {
     pub user_repo: ShareableClosure<ShareableData<dyn UserRepo<U>>>,

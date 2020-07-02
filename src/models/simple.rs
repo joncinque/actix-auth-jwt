@@ -1,3 +1,6 @@
+//! Simple reference implementation for how you might want to create your
+//! own user, including Validators for the DTOs.
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
@@ -70,5 +73,6 @@ impl User for SimpleUser {
 
     type UpdateDto = UpdateSimpleUser;
     fn update(&mut self, update: Self::UpdateDto) {
+        self.email = update.email;
     }
 }

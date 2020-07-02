@@ -1,3 +1,5 @@
+//! Extractor for checking JWT authentication and extracting User info
+
 use actix_http::Payload;
 use actix_http::http::header::Header;
 use actix_web::{Error, HttpRequest, FromRequest};

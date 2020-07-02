@@ -1,3 +1,5 @@
+//! Sample in-memory implementation of UserRepo
+
 use async_trait::async_trait;
 use uuid::Uuid;
 use std::collections::hash_map::{HashMap, Entry};

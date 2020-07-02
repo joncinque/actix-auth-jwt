@@ -5,7 +5,6 @@ pub mod errors;
 pub mod extractors;
 pub mod dtos;
 pub mod jwts;
-pub mod middleware;
 pub mod models;
 pub mod passwords;
 pub mod repos;

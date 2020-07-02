@@ -19,7 +19,7 @@ use actix_auth_jwt::types::shareable_data;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
-    std::env::set_var("RUST_LOG", "actix_mongo=debug,actix_web=info");
+    std::env::set_var("RUST_LOG", "actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
 
     type SimpleBlacklist = InMemoryJwtBlacklist<SimpleUser>;

@@ -1,3 +1,5 @@
+//! Top-level service providing API routes and processor functions
+
 use actix_web::{
     HttpRequest,
     HttpResponse,
@@ -14,8 +16,12 @@ use crate::dtos::{
     ConfirmId,
     LoginUser,
     LoginUserResponse,
+    RefreshToken,
+    RefreshTokenResponse,
     ResetPassword,
     ResetPasswordConfirm,
+    TokenStatus,
+    TokenStatusResponse,
     UpdatePassword
 };
 use crate::extractors::JwtUserId;
@@ -43,18 +49,15 @@ async fn register<U>(req: HttpRequest, registration: Json<U::RegisterDto>, data:
     let hash = (data.hasher.hasher)(String::from(user.password())).await?;
     user.set_password(hash);
 
-    {
-        let id = format!("{}", user.id());
-        let mut user_repo = data.user_repo.write().unwrap();
-        user_repo.insert(user).await?;
-        let url = req.url_for("register-confirm", &[id]).unwrap();
-        builder = builder.body(format!("Please go to {} to confirm your registration.", url));
-    }
+    let id = format!("{}", user.id());
+    let mut user_repo = data.user_repo.write().unwrap();
+    user_repo.insert(user).await?;
+    let url = req.url_for("register-confirm", &[id]).unwrap();
+    builder = builder.body(format!("Please go to {} to confirm your registration.", url));
 
-    {
-        let mut sender = data.sender.write().unwrap();
-        sender.send(builder).await?;
-    }
+    let mut sender = data.sender.write().unwrap();
+    sender.send(builder).await?;
+
     Ok(HttpResponse::Created().body("Success."))
 }
 
@@ -85,6 +88,26 @@ async fn logout<U: User>(auth: BearerAuth, data: Data<AuthState<U>>)
     let mut authenticator = data.authenticator.write().unwrap();
     authenticator.blacklist(auth.token().to_owned()).await?;
     Ok(HttpResponse::Ok().body("Success"))
+}
+
+async fn token_refresh<U: User>(token: Json<RefreshToken>, data: Data<AuthState<U>>)
+    -> Result<HttpResponse, AuthApiError> {
+    let token = token.into_inner();
+    let mut authenticator = data.authenticator.write().unwrap();
+    let pair = authenticator.refresh(token.refresh).await?;
+    let bearer = pair.bearer;
+    let refresh = pair.refresh;
+    Ok(HttpResponse::Ok().json(RefreshTokenResponse { bearer, refresh }))
+}
+
+async fn token_status<U: User>(token: Json<TokenStatus>, data: Data<AuthState<U>>)
+    -> Result<HttpResponse, AuthApiError> {
+    let token = token.into_inner().token;
+    let authenticator = data.authenticator.read().unwrap();
+    let data = authenticator.decode(token)?;
+    let jti = data.claims.jti;
+    let status = authenticator.status(&jti).await;
+    Ok(HttpResponse::Ok().json(TokenStatusResponse { status }))
 }
 
 async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
@@ -130,8 +153,8 @@ async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, dat
     }
 }
 
-pub fn auth_service<U>(scope: Scope) -> Scope
-    where U: User + 'static, {
+/// Function to configure the routes on a service
+pub fn auth_service<U>(scope: Scope) -> Scope where U: User + 'static {
     scope.route("/", get().to(index))
         .route("/register", post().to(register::<U>))
         .service(
@@ -140,6 +163,8 @@ pub fn auth_service<U>(scope: Scope) -> Scope
                 .route(post().to(register_confirm::<U>)))
         .route("/login", post().to(login::<U>))
         .route("/logout", post().to(logout::<U>))
+        .route("/token/refresh", post().to(token_refresh::<U>))
+        .route("/token/status", get().to(token_status::<U>))
         .route("/password/reset", post().to(password_reset::<U>))
         .route("/password/reset/{id}", post().to(password_reset_confirm::<U>))
         .route("/password/update", post().to(password_update::<U>))
@@ -287,6 +312,18 @@ mod tests {
             .uri("/logout")
             .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
             .to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn refresh_token(
+        refresh: String,
+        state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/token/refresh", post().to(token_refresh::<SimpleUser>))
+        ).await;
+        let dto = RefreshToken { refresh };
+        let req = test::TestRequest::post().uri("/token/refresh").set_json(&dto).to_request();
         test::call_service(&mut app, req).await
     }
 
@@ -494,5 +531,24 @@ mod tests {
         let new_password = String::from("newp@ass!");
         let resp = update_password(&result.bearer, "somethingelse", &new_password, &new_password, state.clone()).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_rt::test]
+    async fn refresh_valid_token() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        let resp = login_user(&email, &password, state.clone()).await;
+        let result: LoginUserResponse = read_body_json(resp).await;
+        let resp = refresh_token(result.refresh, state.clone()).await;
+        let result: RefreshTokenResponse = read_body_json(resp).await;
+        assert_ne!(result.bearer, String::from(""));
+        assert_ne!(result.refresh, String::from(""));
     }
 }

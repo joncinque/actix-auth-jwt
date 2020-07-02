@@ -1,9 +1,10 @@
 # actix-auth-jwt
-Sample actix-web application for user management using extras for JWT authentication
+
+Library based on actix-web for user management using JWT for authentication
 
 NOTE: This repo is currently a work-in-progress, so it is not ready for any 
 production use whatsoever.  Either way, feel free to reach out with any
-questions or concerns.
+questions, concerns, or interest.
 
 ## Design
 
@@ -18,18 +19,18 @@ If you have an existing web server using `actix`, or you want to start using
 Rust in a web environment, this package may be for you!
 
 You can include this as an actix `App` within your server, providing routes for:
-* User creation, including email confirmation
+* User registration, including email confirmation
 * Password reset through email
 * Password update
-* Login to receive a new JWT pair
-* Refresh to receive a new JWT pair, blacklisting previous token pair
-* Logout to blacklist token pair
+* Login for a bearer / refresh JWT pair
+* Refresh token to receive a new JWT pair, blacklisting previous token pair
+* Logout to blacklist token
 * User deletion
 * Token validation / decoding
 
-Additionally, you can add access token checking as a
-[middleware](https://actix.rs/docs/middleware/) on your routes, apps, or
-resources as needed.
+Additionally, you can add access token checking using the `JwtUserId`
+[extractor](https://actix.rs/docs/extractors/) on your routes, apps, or
+resources as needed.  It provides quick access to the user's id.
 
 ### Configuration
 
@@ -83,22 +84,24 @@ in the future.
 More information can be found at this excellent
 [guide by Auth0](https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/).
 
-
 ## Prereqs
 
-* Rust 1.42
+* Rust 1.44.1: [install](https://www.rust-lang.org/tools/install)
 
 ## Dependencies
 
-* `actix-web`, `actix-http`, `actix-rt`: all main actix components
-* `bson`: requirements for user serialization / deserialization into MongoDB
+* `actix-web`, `actix-web-httpauth`, `actix-http`, `actix-rt`: all main actix components
+* `bson`: requirements for user serialization / deserialization
 * `dotenv`, `dotenv-codegen`: managing production secrets
 * `log`, `env_logger`: easy logging to stdout
 * `serde`, `serde_json`: easy (de)serialization of structs
 * `failure`: for digestible error messages
+* `async-trait`, `futures`: easier async use
 * `uuid` with `serde`: generating random user ids and serializing to string
 * `jsonwebtoken`: creating JWTs on login, validating authenticated routes
-* `rust-argon2`: for argon2 password hashing
+* `rust-argon2`: for fast argon2 password hashing, `argonautics` was very slow
+* `lettre`, `lettre_email`: for sending emails
+* `validator`: for simple validation of incoming data
 
 ## Building
 
@@ -141,3 +144,4 @@ require `Sized`, see [GitHub issue](https://github.com/tokio-rs/tokio/issues/220
 * Add Redis `UserRepo` implementation
 * Add Diesel `UserRepo` implementation
 * Break out different database implementations into crate features
+* Add `JwtUser` extractor to pull out a full instance of the user, not just the id

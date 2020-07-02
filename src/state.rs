@@ -1,3 +1,5 @@
+//! All state needs for Auth routes
+
 use std::sync::Arc;
 
 use crate::emails::EmailSender;
@@ -9,8 +11,7 @@ use crate::repos::inmemory::InMemoryUserRepo;
 use crate::types::{shareable_data, ShareableData};
 use crate::extractors::JwtUserIdConfig;
 
-pub struct AuthState<U>
-where U: User + 'static {
+pub struct AuthState<U> where U: User + 'static {
     pub user_repo: ShareableData<dyn UserRepo<U>>,
     pub hasher: Arc<PasswordHasher>,
     pub sender: ShareableData<EmailSender>,
@@ -29,8 +30,7 @@ impl<U> AuthState<U> where U: User + 'static {
     }
 }
 
-impl<U> Clone for AuthState<U>
-where U: User + 'static {
+impl<U> Clone for AuthState<U> where U: User + 'static {
     fn clone(&self) -> Self {
         AuthState::<U> {
             user_repo: self.user_repo.clone(),

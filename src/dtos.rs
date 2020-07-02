@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 use validator_derive::Validate;
 
+use crate::jwts::base::JwtStatus;
+
 #[derive(Serialize, Deserialize)]
 pub struct LoginUser {
     pub key: String,
@@ -15,6 +17,27 @@ pub struct LoginUserResponse {
     pub bearer: String,
     pub refresh: String,
     pub user_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RefreshToken {
+    pub refresh: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RefreshTokenResponse {
+    pub bearer: String,
+    pub refresh: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TokenStatus {
+    pub token: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TokenStatusResponse {
+    pub status: JwtStatus,
 }
 
 #[derive(Validate, Serialize, Deserialize)]

@@ -1,18 +1,19 @@
+//! JWT Blacklist requirements
+
 use async_trait::async_trait;
 use futures::future::LocalBoxFuture;
+use serde::{Deserialize, Serialize};
 
 use crate::jwts::types::{Jti, Claims};
 use crate::errors::AuthApiError;
 use crate::models::base::User;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum JwtStatus {
     Outstanding,
     Blacklisted,
     NotFound,
 }
-
-pub trait JwtBlacklistConfig { }
 
 /// Trait for a repository of JWTs that have been created by the system
 #[async_trait]

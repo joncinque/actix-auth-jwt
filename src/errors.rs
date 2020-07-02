@@ -38,6 +38,7 @@ fn into_str(error: &Vec<ValidationError>) -> String {
     error.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join("\n")
 }
 
+/// TODO change this to a From impl
 pub fn from_validation_errors(errors: ValidationErrors) -> AuthApiError {
     let field_errors = errors.field_errors();
     AuthApiError::ValidationErrors {
@@ -46,18 +47,22 @@ pub fn from_validation_errors(errors: ValidationErrors) -> AuthApiError {
     }
 }
 
+/// TODO change this to a From impl
 pub fn from_argon_error(_error: Argon2Error) -> AuthApiError {
     AuthApiError::InternalError
 }
 
+/// TODO change this to a From impl
 pub fn from_rand_error(_error: RandError) -> AuthApiError {
     AuthApiError::InternalError
 }
 
+/// TODO change this to a From impl
 pub fn from_empty(_error: ()) -> AuthApiError {
     AuthApiError::InternalError
 }
 
+/// TODO change this to a From impl
 pub fn from_lettre(_error: LettreError) -> AuthApiError {
     AuthApiError::InternalError
 }

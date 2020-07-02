@@ -1,3 +1,5 @@
+//! Manager for all JWT related operations, wrapping a blacklist
+
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
 use std::time::{SystemTime, Duration};
 use futures::future::LocalBoxFuture;
