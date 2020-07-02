@@ -5,6 +5,7 @@ use actix_web::{
     Scope,
 };
 use actix_web::web::{get, post, resource, Data, Json, Path};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use lettre_email::EmailBuilder;
 use validator::Validate;
 use std::time::SystemTime;
@@ -19,7 +20,7 @@ use crate::dtos::{
 };
 use crate::extractors::JwtUserId;
 use crate::state::AuthState;
-use crate::models::base::{User, Status};
+use crate::models::base::User;
 use crate::repos::base::UserRepo;
 use crate::errors::{self, AuthApiError};
 
@@ -79,8 +80,11 @@ async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
     }
 }
 
-async fn logout<U: User>() -> impl Responder {
-    HttpResponse::Ok().body("Hello, world!")
+async fn logout<U: User>(auth: BearerAuth, data: Data<AuthState<U>>)
+    -> Result<HttpResponse, AuthApiError> {
+    let mut authenticator = data.authenticator.write().unwrap();
+    authenticator.blacklist(auth.token().to_owned()).await?;
+    Ok(HttpResponse::Ok().body("Success"))
 }
 
 async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
@@ -272,6 +276,20 @@ mod tests {
         test::call_service(&mut app, req).await
     }
 
+    async fn logout_user(
+        bearer: &str,
+        state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/logout", post().to(logout::<SimpleUser>))
+        ).await;
+        let req = test::TestRequest::post()
+            .uri("/logout")
+            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .to_request();
+        test::call_service(&mut app, req).await
+    }
+
     #[actix_rt::test]
     async fn get_index() {
         let mut app = test::init_service(App::new().route("/", get().to(index))).await;
@@ -372,6 +390,8 @@ mod tests {
         assert_ne!(result.user_id, String::from(""));
         assert_ne!(result.bearer, String::from(""));
         assert_ne!(result.refresh, String::from(""));
+        let resp = logout_user(&result.bearer, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
     #[actix_rt::test]
@@ -388,6 +408,8 @@ mod tests {
         let resp = confirm_user(&email, transport.clone(), state.clone()).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let resp = login_user(&email, "notp@ssword", state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let resp = logout_user("Bad.token.data", state.clone()).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 

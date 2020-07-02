@@ -315,4 +315,42 @@ mod tests {
         let err = authenticator.decode(token).unwrap_err();
         assert_eq!(err, AuthApiError::JwtError);
     }
+
+    #[actix_rt::test]
+    async fn blacklist_bearer_token() {
+        let mut authenticator: JwtAuthenticator<SimpleUser> = Default::default();
+        let user_id = SimpleUser::generate_id();
+
+        let now = SystemTime::now();
+        let pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
+        let claims = authenticator.decode(pair.refresh.clone()).unwrap().claims;
+        let jti = claims.jti;
+        let result = authenticator.blacklist(pair.bearer).await.unwrap();
+        assert_eq!(result, ());
+        let status = authenticator.status(&jti).await;
+        assert_eq!(status, JwtStatus::Blacklisted);
+    }
+
+    #[actix_rt::test]
+    async fn blacklist_refresh_token() {
+        let mut authenticator: JwtAuthenticator<SimpleUser> = Default::default();
+        let user_id = SimpleUser::generate_id();
+
+        let now = SystemTime::now();
+        let pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
+        let claims = authenticator.decode(pair.bearer.clone()).unwrap().claims;
+        let jti = claims.jti;
+        let result = authenticator.blacklist(pair.refresh).await.unwrap();
+        assert_eq!(result, ());
+        let status = authenticator.status(&jti).await;
+        assert_eq!(status, JwtStatus::Blacklisted);
+    }
+
+    #[actix_rt::test]
+    async fn blacklist_gibberish_token() {
+        let mut authenticator: JwtAuthenticator<SimpleUser> = Default::default();
+        let user_id = SimpleUser::generate_id();
+        let error = authenticator.blacklist(user_id).await.unwrap_err();
+        assert_eq!(error, AuthApiError::JwtError);
+    }
 }

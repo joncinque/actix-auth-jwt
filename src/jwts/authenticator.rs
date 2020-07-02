@@ -93,6 +93,19 @@ impl<U> JwtAuthenticator<U> where U: User {
         self.blacklist.read().unwrap().status_static(jti)
     }
 
+    pub async fn blacklist(&mut self, token: String) -> Result<(), AuthApiError> {
+        let data = self.decode(token)?;
+        let jti = data.claims.jti;
+        match self.status(&jti).await {
+            JwtStatus::Outstanding => {
+                self.blacklist.write().unwrap().blacklist(jti).await?;
+                Ok(())
+            },
+            JwtStatus::NotFound => Err(AuthApiError::NotFound { key: jti }),
+            JwtStatus::Blacklisted => Err(AuthApiError::AlreadyUsed),
+        }
+    }
+
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {
         let data = self.decode(refresh)?;
         if data.claims.token_type != TokenType::Refresh {

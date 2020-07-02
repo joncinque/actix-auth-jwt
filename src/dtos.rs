@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 use validator_derive::Validate;
 
-use crate::models::base::User;
-
 #[derive(Serialize, Deserialize)]
 pub struct LoginUser {
     pub key: String,
