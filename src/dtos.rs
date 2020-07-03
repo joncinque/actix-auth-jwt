@@ -53,8 +53,9 @@ pub struct ResetPassword {
     pub key: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Validate, Serialize, Deserialize)]
 pub struct ResetPasswordConfirm {
+    #[validate(must_match = "password2", length(min = 8, max = 100))]
     pub password1: String,
     pub password2: String,
 }

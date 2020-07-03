@@ -152,5 +152,14 @@ mod tests {
         assert_eq!(error.as_response_error().status_code(), StatusCode::UNAUTHORIZED);
         let error = error.to_string();
         assert_eq!(error, "Error with JWT");
+
+        let (req, mut pl) =
+            TestRequest::default()
+                .header(AUTHORIZATION, format!("Bearer {}", new_pair.bearer))
+                .app_data(JwtUserIdConfig { authenticator: authenticator.clone() })
+                .to_http_parts();
+
+        let user = JwtUserId::<SimpleUser>::from_request(&req, &mut pl).await.unwrap();
+        assert_eq!(user.user_id, user_id);
     }
 }

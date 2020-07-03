@@ -30,6 +30,8 @@ use crate::models::base::User;
 use crate::repos::base::UserRepo;
 use crate::errors::{self, AuthApiError};
 
+const SUCCESS_MESSAGE: &str = "Success";
+
 async fn index() -> impl Responder {
     HttpResponse::Ok().body("Hello, world!")
 }
@@ -58,7 +60,7 @@ async fn register<U>(req: HttpRequest, registration: Json<U::RegisterDto>, data:
     let mut sender = data.sender.write().unwrap();
     sender.send(builder).await?;
 
-    Ok(HttpResponse::Created().body("Success."))
+    Ok(HttpResponse::Created().body(SUCCESS_MESSAGE))
 }
 
 async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
@@ -87,7 +89,7 @@ async fn logout<U: User>(auth: BearerAuth, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError> {
     let mut authenticator = data.authenticator.write().unwrap();
     authenticator.blacklist(auth.token().to_owned()).await?;
-    Ok(HttpResponse::Ok().body("Success"))
+    Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
 
 async fn token_refresh<U: User>(token: Json<RefreshToken>, data: Data<AuthState<U>>)
@@ -116,7 +118,7 @@ async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
     let mut user_repo = data.user_repo.write().unwrap();
     let info = info.into_inner();
     let id = U::Id::from(info.id);
-    user_repo.confirm(&id).await.map(|_| HttpResponse::Ok().body("Success"))
+    user_repo.confirm(&id).await.map(|_| HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
 
 async fn password_reset_confirm<U>(
@@ -124,14 +126,50 @@ async fn password_reset_confirm<U>(
     reset: Json<ResetPasswordConfirm>,
     data: Data<AuthState<U>>) -> Result<HttpResponse, AuthApiError>
     where U: User, {
-    Ok(HttpResponse::Ok().body("Success"))
+    let reset = reset.into_inner();
+    reset.validate().map_err(errors::from_validation_errors)?;
+    let info = info.into_inner();
+    let now = SystemTime::now();
+    let mut user_repo = data.user_repo.write().unwrap();
+    user_repo.password_reset_confirm(&info.id, reset.password1, now).await?;
+    Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
 
-async fn password_reset<U>(reset: Json<ResetPassword>, data: Data<AuthState<U>>)
+async fn password_reset<U>(req: HttpRequest, reset: Json<ResetPassword>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
     where U: User, {
-    Ok(HttpResponse::Ok().body("Success"))
+    let key = U::Key::from(reset.into_inner().key);
+    let mut user_repo = data.user_repo.write().unwrap();
+    let now = SystemTime::now();
+    let user = user_repo.get_by_key(&key).await?;
+    let email = user.email().to_owned();
+    let reset_id =  user_repo.password_reset(&key, now).await?;
+
+    let mut builder = EmailBuilder::new()
+        .to(email)
+        .subject("Reset password");
+
+    let url = req.url_for("password-reset-confirm", &[reset_id]).unwrap();
+    builder = builder.body(format!("Please go to {} to reset your password.", url));
+
+    let mut sender = data.sender.write().unwrap();
+    sender.send(builder).await?;
+    Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
+
+async fn update<U: User>(update: Json<U::UpdateDto>, user: JwtUserId<U>, data: Data<AuthState<U>>)
+    -> Result<HttpResponse, AuthApiError> {
+    let update = update.into_inner();
+    update.validate().map_err(errors::from_validation_errors)?;
+    let mut user_repo = data.user_repo.write().unwrap();
+    let id = user.user_id;
+    let user = user_repo.get_by_id(&id).await?;
+    let mut user = user.clone();
+    user.update(update);
+    user_repo.update(user).await?;
+    Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
+}
+
 
 async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
@@ -147,7 +185,7 @@ async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, dat
         let mut user = user.clone();
         user.set_password(hash);
         user_repo.update(user).await?;
-        Ok(HttpResponse::Ok().body("Success"))
+        Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
     } else {
         Err(AuthApiError::Unauthenticated)
     }
@@ -163,10 +201,14 @@ pub fn auth_service<U>(scope: Scope) -> Scope where U: User + 'static {
                 .route(post().to(register_confirm::<U>)))
         .route("/login", post().to(login::<U>))
         .route("/logout", post().to(logout::<U>))
+        .route("/update", post().to(update::<U>))
         .route("/token/refresh", post().to(token_refresh::<U>))
         .route("/token/status", get().to(token_status::<U>))
         .route("/password/reset", post().to(password_reset::<U>))
-        .route("/password/reset/{id}", post().to(password_reset_confirm::<U>))
+        .service(
+            resource("/password/reset/{id}")
+                .name("password-reset-confirm")
+                .route(post().to(password_reset_confirm::<U>)))
         .route("/password/update", post().to(password_update::<U>))
 }
 
@@ -181,6 +223,7 @@ mod tests {
     use regex::Regex;
     use serde::de::DeserializeOwned;
 
+    use crate::jwts::base::JwtStatus;
     use crate::models::base::User;
     use crate::models::simple::SimpleUser;
     use crate::transports::InMemoryTransport;
@@ -189,6 +232,7 @@ mod tests {
     use super::*;
 
     type RegisterDto = <SimpleUser as User>::RegisterDto;
+    type UpdateDto = <SimpleUser as User>::UpdateDto;
 
     fn register_dto(email: String, password1: String, password2: String) -> RegisterDto {
         RegisterDto { email, password1, password2, }
@@ -209,7 +253,7 @@ mod tests {
             .unwrap_or_else(|_| panic!("read_body_json failed during deserialization"))
     }
 
-    fn get_confirmation_url(message: &String) -> &str {
+    fn get_confirmation_url(message: &str) -> &str {
         let re = Regex::new(r"http://\S+").unwrap();
         let m = re.find(&message).unwrap();
         m.as_str()
@@ -264,6 +308,48 @@ mod tests {
         resp
     }
 
+    async fn reset_password_initiate(email: &str, state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/password/reset", post().to(password_reset::<SimpleUser>))
+                .service(
+                    resource("/password/reset/{id}")
+                        .name("password-reset-confirm")
+                        .route(post().to(password_reset_confirm::<SimpleUser>)))
+        ).await;
+        let key = email.to_owned();
+        let dto = ResetPassword { key };
+        let req = test::TestRequest::post().uri("/password/reset").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn reset_password_confirm(
+        password1: &str,
+        password2: &str,
+        transport: ShareableData<InMemoryTransport>,
+        state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state.clone())
+                .service(
+                    resource("/password/reset/{id}")
+                        .name("password-reset-confirm")
+                        .route(post().to(password_reset_confirm::<SimpleUser>)))
+        ).await;
+
+        let message = {
+            let confirmation = transport.write().unwrap().emails.remove(0);
+            confirmation.message_to_string().unwrap()
+        };
+        let url = get_confirmation_url(&message);
+
+        let password1 = password1.to_owned();
+        let password2 = password2.to_owned();
+        let dto = ResetPasswordConfirm  { password1, password2 };
+        let req = test::TestRequest::post().uri(url).set_json(&dto).to_request();
+        let resp = test::call_service(&mut app, req).await;
+        resp
+    }
+
     async fn login_user(
         email: &str,
         password: &str,
@@ -274,6 +360,23 @@ mod tests {
         ).await;
         let dto = LoginUser { key: email.to_owned(), password: password.to_owned() };
         let req = test::TestRequest::post().uri("/login").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn update_user( bearer: &str, email: &str, state: AuthState<SimpleUser>)
+        -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new()
+                .app_data(state.extractor.clone())
+                .data(state)
+                .route("/update", post().to(update::<SimpleUser>))
+        ).await;
+        let email = email.to_owned();
+        let dto = UpdateDto { email };
+        let req = test::TestRequest::post()
+            .uri("/update")
+            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .set_json(&dto).to_request();
         test::call_service(&mut app, req).await
     }
 
@@ -324,6 +427,18 @@ mod tests {
         ).await;
         let dto = RefreshToken { refresh };
         let req = test::TestRequest::post().uri("/token/refresh").set_json(&dto).to_request();
+        test::call_service(&mut app, req).await
+    }
+
+    async fn status_token(
+        token: String,
+        state: AuthState<SimpleUser>) -> ServiceResponse {
+        let mut app = test::init_service(
+            App::new().data(state)
+                .route("/token/status", get().to(token_status::<SimpleUser>))
+        ).await;
+        let dto = TokenStatus { token };
+        let req = test::TestRequest::get().uri("/token/status").set_json(&dto).to_request();
         test::call_service(&mut app, req).await
     }
 
@@ -427,6 +542,10 @@ mod tests {
         assert_ne!(result.user_id, String::from(""));
         assert_ne!(result.bearer, String::from(""));
         assert_ne!(result.refresh, String::from(""));
+        let resp = status_token(result.bearer.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let status: TokenStatusResponse = read_body_json(resp).await;
+        assert_eq!(status.status, JwtStatus::Outstanding);
         let resp = logout_user(&result.bearer, state.clone()).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -543,12 +662,69 @@ mod tests {
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
         let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
         let resp = login_user(&email, &password, state.clone()).await;
+        let result1: LoginUserResponse = read_body_json(resp).await;
+        let resp = status_token(result1.bearer.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let status: TokenStatusResponse = read_body_json(resp).await;
+        assert_eq!(status.status, JwtStatus::Outstanding);
+        let resp = refresh_token(result1.refresh.clone(), state.clone()).await;
+        let result2: RefreshTokenResponse = read_body_json(resp).await;
+        assert_ne!(result2.bearer, String::from(""));
+        assert_ne!(result2.refresh, String::from(""));
+        let resp = status_token(result2.bearer, state.clone()).await;
+        let status: TokenStatusResponse = read_body_json(resp).await;
+        assert_eq!(status.status, JwtStatus::Outstanding);
+        let resp = status_token(result1.bearer, state.clone()).await;
+        let status: TokenStatusResponse = read_body_json(resp).await;
+        assert_eq!(status.status, JwtStatus::Blacklisted);
+    }
+
+    #[actix_rt::test]
+    async fn reset_user_password() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = reset_password_initiate(&email, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let password = String::from("newp@ssword");
+        let resp = reset_password_confirm(&password, &password, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn update_simple_user() {
+        let state: AuthState<SimpleUser> = Default::default();
+        let sender = state.sender.clone();
+        let transport = shareable_data(InMemoryTransport::default());
+        sender.write().unwrap().transport = transport.clone();
+
+        let email = String::from("test@example.com");
+        let password = String::from("p@ssword");
+        let resp = register_user(&email, &password, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let resp = confirm_user(&email, transport.clone(), state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
         let result: LoginUserResponse = read_body_json(resp).await;
-        let resp = refresh_token(result.refresh, state.clone()).await;
-        let result: RefreshTokenResponse = read_body_json(resp).await;
-        assert_ne!(result.bearer, String::from(""));
-        assert_ne!(result.refresh, String::from(""));
+        let new_email = String::from("newtest@example.com");
+        let resp = update_user(&result.bearer, &new_email, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = login_user(&new_email, &password, state.clone()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 }

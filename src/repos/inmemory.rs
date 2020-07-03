@@ -112,6 +112,12 @@ impl<U> UserRepo<U> for InMemoryUserRepo<U>
         let id = user.id().clone();
         match self.users_by_id.entry(id) {
             Entry::Occupied(mut e) => {
+                let old_user = e.get();
+                if old_user.key() != user.key() {
+                    if let Some(id) = self.users_by_key.remove(old_user.key()) {
+                        self.users_by_key.insert(user.key().clone(), id);
+                    }
+                }
                 e.insert(user);
                 Ok(())
             },
@@ -208,7 +214,7 @@ mod tests {
         let err = repo.get_by_key(&email).await.unwrap_err();
         assert!(matches!(err, AuthApiError::NotFound { .. }));
         let id = String::from("unknown_id");
-        let user = repo.get_by_id(&id).await;
+        let err = repo.get_by_id(&id).await.unwrap_err();
         assert!(matches!(err, AuthApiError::NotFound { .. }));
     }
 
@@ -394,7 +400,7 @@ mod tests {
         let reset_id = repo.password_reset(&email, now).await.unwrap();
         let new_password = String::from("newp@ssword");
         let too_late = now + Duration::from_secs(60 * 60);
-        let err = repo.password_reset_confirm(&reset_id, password, too_late).await.unwrap_err();
+        let err = repo.password_reset_confirm(&reset_id, new_password, too_late).await.unwrap_err();
         if let AuthApiError::TokenExpired = err {
         } else {
             println!("{}", err);
