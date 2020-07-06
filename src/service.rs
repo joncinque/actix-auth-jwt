@@ -27,6 +27,8 @@ use crate::dtos::{
 use crate::extractors::JwtUserId;
 use crate::state::AuthState;
 use crate::models::base::User;
+// import needed to know what's on UserRepo, but gets improperly flagged
+#[allow(unused_imports)]
 use crate::repos::base::UserRepo;
 use crate::errors::{self, AuthApiError};
 

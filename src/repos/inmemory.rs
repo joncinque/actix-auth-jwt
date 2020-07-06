@@ -152,259 +152,101 @@ impl<U> UserRepo<U> for InMemoryUserRepo<U>
 mod tests {
     use super::*;
     use crate::models::simple::SimpleUser;
-
-    async fn create_user(email: &str, password: &str, repo: &mut InMemoryUserRepo<SimpleUser>) -> <SimpleUser as User>::Id {
-        let user = SimpleUser::new(email.to_owned(), password.to_owned());
-        let id = user.id().clone();
-        repo.insert(user).await.unwrap();
-        repo.confirm(&id).await.unwrap();
-        id
-    }
+    use crate::repos::base;
 
     #[actix_rt::test]
     async fn get_created_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let id = create_user(&email, &password, &mut repo).await;
-        let user = repo.get_by_key(&email).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
-        assert_eq!(id, *user.id());
-        let user = repo.get_by_id(&id).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
-        assert_eq!(id, *user.id());
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::get_created_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_double_create_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let user1 = SimpleUser::new(email.clone(), password.clone());
-        repo.insert(user1).await.unwrap();
-        let user2 = SimpleUser::new(email.clone(), password.clone());
-        let err = repo.insert(user2).await.unwrap_err();
-        if let AuthApiError::AlreadyExists { key } = err {
-            assert_eq!(key, email);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_double_create_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn get_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email: <SimpleUser as User>::Key = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let id = create_user(&email, &password, &mut repo).await;
-        let user = repo.get_by_key(&email).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
-        let user = repo.get_by_id(&id).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::get_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_get_user() {
         let repo = InMemoryUserRepo::<SimpleUser>::new();
-        let email = String::from("user@example.com");
-        let err = repo.get_by_key(&email).await.unwrap_err();
-        assert!(matches!(err, AuthApiError::NotFound { .. }));
-        let id = String::from("unknown_id");
-        let err = repo.get_by_id(&id).await.unwrap_err();
-        assert!(matches!(err, AuthApiError::NotFound { .. }));
+        base::tests::fail_get_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_remove_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let id: <SimpleUser as User>::Id = String::from("some-unknown-id");
-        let err = repo.remove(&id).await.unwrap_err();
-        if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, id);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_remove_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn remove_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let id = create_user(&email, &password, &mut repo).await;
-        let user = repo.remove(&id).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
-        assert_eq!(id, *user.id());
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::remove_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_update_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let user = SimpleUser::new(email.clone(), password.clone());
-        let id = user.id().clone();
-        let err = repo.update(user).await.unwrap_err();
-        if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, id);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_update_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn update_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let id = create_user(&email, &password, &mut repo).await;
-        let mut user = repo.get_by_key(&email).await.unwrap().clone();
-        let password2 = String::from("p@ssword2");
-        user.password = password2.clone();
-        repo.update(user).await.unwrap();
-        let user = repo.get_by_key(&email).await.unwrap().clone();
-        assert_eq!(password2, user.password);
-        assert_eq!(id, user.userid);
-        assert_eq!(email, user.email);
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::update_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn confirm_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let id;
-        {
-            let user = SimpleUser::new(email.clone(), password.clone());
-            id = user.id().clone();
-            repo.insert(user).await.unwrap();
-        }
-        {
-            let err = repo.get_by_key(&email).await.unwrap_err();
-            assert!(matches!(err, AuthApiError::Unconfirmed { .. }));
-        }
-        repo.confirm(&id).await.unwrap();
-        let user = repo.get_by_key(&email).await.unwrap();
-        assert_eq!(Status::Confirmed, *user.status());
-        assert_eq!(id, user.userid);
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::confirm_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_insert_user_exists_unconfirmed() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        {
-            let user = SimpleUser::new(email.clone(), password.clone());
-            repo.insert(user).await.unwrap();
-        }
-        {
-            let user = SimpleUser::new(email.clone(), password.clone());
-            let err = repo.insert(user).await.unwrap_err();
-            if let AuthApiError::AlreadyExists { key } = err {
-                assert_eq!(key, email);
-            } else {
-                panic!("Wrong error type");
-            }
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_insert_user_exists_unconfirmed(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_insert_user_exists_confirmed() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        create_user(&email, &password, &mut repo).await;
-        {
-            let user = SimpleUser::new(email.clone(), password.clone());
-            let err = repo.insert(user).await.unwrap_err();
-            if let AuthApiError::AlreadyExists { key } = err {
-                assert_eq!(key, email);
-            } else {
-                panic!("Wrong error type");
-            }
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_insert_user_exists_confirmed(repo).await;
     }
 
     #[actix_rt::test]
     async fn password_reset() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        create_user(&email, &password, &mut repo).await;
-
-        let now = SystemTime::now();
-        let reset_id = repo.password_reset(&email, now).await.unwrap();
-        let new_password = String::from("newp@ssword");
-        repo.password_reset_confirm(&reset_id, new_password.clone(), now).await.unwrap();
-
-        let user = repo.get_by_key(&email).await.unwrap();
-        assert_eq!(user.password, new_password);
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::password_reset(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_password_reset_no_id() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let now = SystemTime::now();
-        let email = String::from("user@example.com");
-        let err = repo.password_reset(&email, now).await.unwrap_err();
-        if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, email);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_password_reset_no_id(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_password_reset_no_user() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let now = SystemTime::now();
-        let email = String::from("user@example.com");
-        let err = repo.password_reset(&email, now).await.unwrap_err();
-        if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, email);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_password_reset_no_user(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_password_reset_confirm_no_id() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let now = SystemTime::now();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        let err = repo.password_reset_confirm(&email, password, now).await.unwrap_err();
-        if let AuthApiError::NotFound { key } = err {
-            assert_eq!(key, email);
-        } else {
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_password_reset_confirm_no_id(repo).await;
     }
 
     #[actix_rt::test]
     async fn fail_password_reset_confirm_too_late() {
-        let mut repo: InMemoryUserRepo<SimpleUser> = Default::default();
-        let email = String::from("user@example.com");
-        let password = String::from("p@ssword");
-        create_user(&email, &password, &mut repo).await;
-
-        let now = SystemTime::now();
-        let reset_id = repo.password_reset(&email, now).await.unwrap();
-        let new_password = String::from("newp@ssword");
-        let too_late = now + Duration::from_secs(60 * 60);
-        let err = repo.password_reset_confirm(&reset_id, new_password, too_late).await.unwrap_err();
-        if let AuthApiError::TokenExpired = err {
-        } else {
-            println!("{}", err);
-            panic!("Wrong error type");
-        }
+        let repo: InMemoryUserRepo<SimpleUser> = Default::default();
+        base::tests::fail_password_reset_confirm_too_late(repo).await;
     }
 }

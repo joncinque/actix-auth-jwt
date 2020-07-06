@@ -1,8 +1,7 @@
 //! All User info, to be implemented by custom User classes
 
 use std::hash::Hash;
-use std::fmt::Display;
-use bson::{Bson, DecoderResult, EncoderResult};
+use std::fmt::{Debug, Display};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use validator::Validate;
@@ -51,16 +50,6 @@ pub trait User
     /// An email is required for sending messages, be it registration confirmation,
     /// password reset, or anything else.
     fn email(&self) -> &str;
-
-    /// Serialization into a database, eventually MongoDB
-    fn to_bson(&self) -> EncoderResult<Bson> {
-        bson::to_bson(self)
-    }
-
-    /// Deserialization from a database, eventually MongoDB
-    fn from_bson(doc: Bson) -> DecoderResult<Self> {
-        bson::from_bson::<Self>(doc)
-    }
 
     /// A data transfer object type to be defined for creating a new User on
     /// registration.  If only email and password is required to create a User,
