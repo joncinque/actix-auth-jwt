@@ -10,7 +10,7 @@ use crate::models::base::{User, Status};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimpleUser {
-    pub userid: String,
+    pub id: String,
     pub email: String,
     pub password: String,
     pub status: Status,
@@ -33,10 +33,10 @@ pub struct UpdateSimpleUser {
 
 impl SimpleUser {
     pub fn new(email: String, password: String) -> SimpleUser {
-        let userid = Uuid::new_v4().to_string();
+        let id = Uuid::new_v4().to_string();
         let status = Status::Unconfirmed;
         SimpleUser {
-            userid,
+            id,
             email,
             password,
             status,
@@ -49,14 +49,31 @@ impl User for SimpleUser {
     type Id = String;
 
     fn key(&self) -> &Self::Key { &self.email }
-    fn id(&self) -> &Self::Id { &self.userid }
+    fn id(&self) -> &Self::Id { &self.id }
     fn email(&self) -> &str { &self.email }
     fn status(&self) -> &Status { &self.status }
     fn password(&self) -> &str { self.password.as_str() }
 
+    fn key_field() -> &'static str {
+        "email"
+    }
+
+    fn id_field() -> &'static str {
+        "id"
+    }
+
+    fn password_field() -> &'static str {
+        "password"
+    }
+
+    fn status_field() -> &'static str {
+        "status"
+    }
+
     fn set_status(&mut self, status: Status) {
         self.status = status;
     }
+
     fn set_password(&mut self, password: String) {
         self.password = password;
     }

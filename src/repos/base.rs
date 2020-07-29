@@ -9,16 +9,19 @@ use crate::models::base::User;
 /// UserRepo contains all of the requirements for managing a user
 #[async_trait]
 pub trait UserRepo<U> where U: User {
+    /// Initiate any connections to make the repo usable.  Assume that this is
+    /// called before anything happens in the system.
+    async fn start(&mut self) -> Result<(), AuthApiError>;
     /// Get a User based in the human-provided key, most useful on login
-    async fn get_by_key(&self, key: &U::Key) -> Result<&U, AuthApiError>;
+    async fn get_by_key(&self, key: &U::Key) -> Result<U, AuthApiError>;
     /// Get a User based on the machine-generated id, useful everywhere a User
     /// needs to be fetched from a JWT
-    async fn get_by_id(&self, id: &U::Id) -> Result<&U, AuthApiError>;
+    async fn get_by_id(&self, id: &U::Id) -> Result<U, AuthApiError>;
 
     /// Add a new User, returning Err if the key or id already exists
     async fn insert(&mut self, user: U) -> Result<(), AuthApiError>;
     /// Remove an existing User based on Id
-    async fn remove(&mut self, id: &U::Id) -> Result<U, AuthApiError>;
+    async fn remove(&mut self, id: &U::Id) -> Result<(), AuthApiError>;
     /// Update an existing User based on Id
     async fn update(&mut self, user: U) -> Result<(), AuthApiError>;
     /// Confirm the registration of a User, usually coming from an emailed link
@@ -52,6 +55,7 @@ pub mod tests {
     }
 
     pub async fn get_created_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let id = create_user(&email, &password, &mut repo).await;
@@ -66,6 +70,7 @@ pub mod tests {
     }
 
     pub async fn fail_double_create_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user1 = SimpleUser::new(email.clone(), password.clone());
@@ -81,6 +86,7 @@ pub mod tests {
 
 
     pub async fn get_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email: <SimpleUser as User>::Key = String::from("user@example.com");
         let password = String::from("p@ssword");
         let id = create_user(&email, &password, &mut repo).await;
@@ -92,7 +98,8 @@ pub mod tests {
         assert_eq!(password, user.password);
     }
 
-    pub async fn fail_get_user<T: UserRepo<SimpleUser>>(repo: T) {
+    pub async fn fail_get_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let err = repo.get_by_key(&email).await.unwrap_err();
         assert!(matches!(err, AuthApiError::NotFound { .. }));
@@ -102,6 +109,7 @@ pub mod tests {
     }
 
     pub async fn fail_remove_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let id: <SimpleUser as User>::Id = String::from("some-unknown-id");
         let err = repo.remove(&id).await.unwrap_err();
         if let AuthApiError::NotFound { key } = err {
@@ -112,16 +120,17 @@ pub mod tests {
     }
 
     pub async fn remove_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let id = create_user(&email, &password, &mut repo).await;
-        let user = repo.remove(&id).await.unwrap();
-        assert_eq!(email, user.email);
-        assert_eq!(password, user.password);
-        assert_eq!(id, *user.id());
+        repo.remove(&id).await.unwrap();
+        let err = repo.get_by_key(&email).await.unwrap_err();
+        assert!(matches!(err, AuthApiError::NotFound { .. }));
     }
 
     pub async fn fail_update_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let user = SimpleUser::new(email.clone(), password.clone());
@@ -135,6 +144,7 @@ pub mod tests {
     }
 
     pub async fn update_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let id = create_user(&email, &password, &mut repo).await;
@@ -144,11 +154,12 @@ pub mod tests {
         repo.update(user).await.unwrap();
         let user = repo.get_by_key(&email).await.unwrap().clone();
         assert_eq!(password2, user.password);
-        assert_eq!(id, user.userid);
+        assert_eq!(id, user.id);
         assert_eq!(email, user.email);
     }
 
     pub async fn confirm_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         let id;
@@ -164,12 +175,13 @@ pub mod tests {
         repo.confirm(&id).await.unwrap();
         let user = repo.get_by_key(&email).await.unwrap();
         assert_eq!(Status::Confirmed, *user.status());
-        assert_eq!(id, user.userid);
+        assert_eq!(id, user.id);
         assert_eq!(email, user.email);
         assert_eq!(password, user.password);
     }
 
     pub async fn fail_insert_user_exists_unconfirmed<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         {
@@ -188,6 +200,7 @@ pub mod tests {
     }
 
     pub async fn fail_insert_user_exists_confirmed<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         create_user(&email, &password, &mut repo).await;
@@ -203,6 +216,7 @@ pub mod tests {
     }
 
     pub async fn password_reset<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         create_user(&email, &password, &mut repo).await;
@@ -217,6 +231,7 @@ pub mod tests {
     }
 
     pub async fn fail_password_reset_no_id<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let now = SystemTime::now();
         let email = String::from("user@example.com");
         let err = repo.password_reset(&email, now).await.unwrap_err();
@@ -228,6 +243,7 @@ pub mod tests {
     }
 
     pub async fn fail_password_reset_no_user<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let now = SystemTime::now();
         let email = String::from("user@example.com");
         let err = repo.password_reset(&email, now).await.unwrap_err();
@@ -239,6 +255,7 @@ pub mod tests {
     }
 
     pub async fn fail_password_reset_confirm_no_id<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let now = SystemTime::now();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
@@ -251,6 +268,7 @@ pub mod tests {
     }
 
     pub async fn fail_password_reset_confirm_too_late<T: UserRepo<SimpleUser>>(mut repo: T) {
+        repo.start().await.unwrap();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
         create_user(&email, &password, &mut repo).await;

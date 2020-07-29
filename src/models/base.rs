@@ -32,18 +32,22 @@ pub trait User
     /// Generate a new random Id, usually to be assigned to a created User.
     fn generate_id() -> Self::Id;
 
-    /// Get the User's human-readable key
+    /// Get the User's human-readable key, used for database interaction
+    fn key_field() -> &'static str;
     fn key(&self) -> &Self::Key;
-    /// Get the User's machine-generated id
+    /// Get the User's machine-generated id, used for database interaction
+    fn id_field() -> &'static str;
     fn id(&self) -> &Self::Id;
 
-    /// Get User status
+    /// Get the User's status, used for confirming users
+    fn status_field() -> &'static str;
     fn status(&self) -> &Status;
     fn set_status(&mut self, status: Status);
 
     /// Get User password, however it was saved in the system.  Typically, the
     /// UserRepo or Service will hash it, but the User does not need to know
     /// that.
+    fn password_field() -> &'static str;
     fn password(&self) -> &str;
     fn set_password(&mut self, hash: String);
 

@@ -6,6 +6,8 @@ use failure::Fail;
 use lettre_email::error::Error as LettreError;
 use rand::Error as RandError;
 use validator::{ValidationError, ValidationErrors};
+use mongodb::error::{ErrorKind, Error as MongoError};
+use regex::Regex;
 
 /// Domain-specific errors with any extra information required
 #[derive(Fail, Debug, PartialEq)]
@@ -70,6 +72,49 @@ pub fn from_lettre(_error: LettreError) -> AuthApiError {
 impl From<jsonwebtoken::errors::Error> for AuthApiError {
     fn from(_err: jsonwebtoken::errors::Error) -> AuthApiError {
         AuthApiError::JwtError
+    }
+}
+
+const DUPLICATE_WRITE_ERROR: i32 = 11000;
+
+impl From<MongoError> for AuthApiError {
+    fn from(error: MongoError) -> AuthApiError {
+        match error.kind.as_ref() {
+            ErrorKind::WriteError(f) => {
+                match f {
+                    mongodb::error::WriteFailure::WriteError(we) => {
+                        match we.code {
+                            DUPLICATE_WRITE_ERROR => {
+                                let re = Regex::new("dup key.*\"(.*)\"").unwrap();
+                                println!("{}", &we.message);
+                                match re.captures(&we.message) {
+                                    None => AuthApiError::InternalError,
+                                    Some(caps) => {
+                                        let key = caps.get(1).map_or("", |m| m.as_str()).to_owned();
+                                        AuthApiError::AlreadyExists { key }
+                                    }
+                                }
+                            },
+                            _ => AuthApiError::InternalError,
+                        }
+                    }
+                    _ => AuthApiError::InternalError,
+                }
+            },
+            _ => AuthApiError::InternalError,
+        }
+    }
+}
+
+impl From<bson::ser::Error> for AuthApiError {
+    fn from(_err: bson::ser::Error) -> AuthApiError {
+        AuthApiError::InternalError
+    }
+}
+
+impl From<bson::de::Error> for AuthApiError {
+    fn from(_err: bson::de::Error) -> AuthApiError {
+        AuthApiError::InternalError
     }
 }
 

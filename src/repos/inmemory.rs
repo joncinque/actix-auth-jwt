@@ -9,15 +9,13 @@ use crate::errors::AuthApiError;
 use crate::repos::base::UserRepo;
 use crate::models::base::{User, Status};
 
-pub struct InMemoryUserRepo<U>
-    where U: User {
+pub struct InMemoryUserRepo<U: User> {
     users_by_id: HashMap<U::Id, U>,
     users_by_key: HashMap<U::Key, U::Id>,
     password_resets: HashMap<String, (SystemTime, U::Id)>,
 }
 
-impl<U> InMemoryUserRepo<U>
-    where U: User {
+impl<U: User> InMemoryUserRepo<U> {
     pub fn new() -> Self {
         let users_by_key = HashMap::new();
         let users_by_id = HashMap::new();
@@ -30,26 +28,27 @@ impl<U> InMemoryUserRepo<U>
     }
 }
 
-impl<U> Default for InMemoryUserRepo<U>
-where U: User {
+impl<U: User> Default for InMemoryUserRepo<U> {
     fn default() -> Self {
         InMemoryUserRepo::new()
     }
 }
 
 #[async_trait]
-impl<U> UserRepo<U> for InMemoryUserRepo<U>
-    where U: User {
+impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
+    async fn start(&mut self) -> Result<(), AuthApiError> {
+        Ok(())
+    }
 
-    async fn get_by_key<'a>(&'a self, key: &U::Key) -> Result<&'a U, AuthApiError> {
+    async fn get_by_key(&self, key: &U::Key) -> Result<U, AuthApiError> {
         let user_id = self.users_by_key.get(key).ok_or(AuthApiError::NotFound { key: format!("{}", key) })?;
         self.get_by_id(user_id).await
     }
 
-    async fn get_by_id<'a>(&'a self, id: &U::Id) -> Result<&'a U, AuthApiError> {
+    async fn get_by_id(&self, id: &U::Id) -> Result<U, AuthApiError> {
         let user = self.users_by_id.get(id).ok_or(AuthApiError::NotFound { key: format!("{}", id) })?;
         match *user.status() {
-            Status::Confirmed => Ok(user),
+            Status::Confirmed => Ok(user.clone()),
             Status::Unconfirmed => Err(AuthApiError::Unconfirmed { key: format!("{}", id) }),
             Status::Suspended => Err(AuthApiError::Unauthorized),
             Status::Deleted => Err(AuthApiError::NotFound { key: format!("{}", id) }),
@@ -96,11 +95,11 @@ impl<U> UserRepo<U> for InMemoryUserRepo<U>
         }
     }
 
-    async fn remove(&mut self, id: &U::Id) -> Result<U, AuthApiError> {
+    async fn remove(&mut self, id: &U::Id) -> Result<(), AuthApiError> {
         match self.users_by_id.remove(&id) {
             Some(v) => {
                 self.users_by_key.remove(v.key());
-                Ok(v)
+                Ok(())
             },
             None => {
                 Err(AuthApiError::NotFound { key: format!("{}", id) })
