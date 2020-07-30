@@ -22,8 +22,11 @@ impl<U> InMemoryJwtBlacklist<U> where U: User {
             blacklist,
         }
     }
+}
 
-    pub fn status_sync(&self, jti: &Jti) -> JwtStatus {
+#[async_trait]
+impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
+    async fn status(&self, jti: &Jti) -> JwtStatus {
         if self.outstanding.contains_key(jti) {
             JwtStatus::Outstanding
         } else if self.blacklist.contains_key(jti) {
@@ -31,17 +34,6 @@ impl<U> InMemoryJwtBlacklist<U> where U: User {
         } else {
             JwtStatus::NotFound
         }
-    }
-}
-
-#[async_trait]
-impl<U> JwtBlacklist<U> for InMemoryJwtBlacklist<U> where U: User {
-    async fn status(&self, jti: &Jti) -> JwtStatus {
-        self.status_sync(jti)
-    }
-
-    fn status_static(&self, jti: &Jti) -> LocalBoxFuture<'static, JwtStatus> {
-        ready(self.status_sync(jti)).boxed_local()
     }
 
     async fn blacklist(&mut self, jti: Jti) -> Result<(), AuthApiError> {
@@ -104,7 +96,7 @@ mod tests {
         let now = SystemTime::now();
         let token_pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
 
-        let decoded = authenticator.decode(token_pair.bearer).unwrap();
+        let decoded = authenticator.decode(&token_pair.bearer).unwrap();
         let claims = decoded.claims;
         assert_eq!(claims.token_type, TokenType::Bearer);
         assert_eq!(claims.sub, user_id);
@@ -123,7 +115,7 @@ mod tests {
         let now = SystemTime::now();
         let token_pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
 
-        let decoded = authenticator.decode(token_pair.refresh).unwrap();
+        let decoded = authenticator.decode(&token_pair.refresh).unwrap();
         let claims = decoded.claims;
         assert_eq!(claims.token_type, TokenType::Refresh);
         assert_eq!(claims.sub, user_id);
@@ -142,12 +134,12 @@ mod tests {
 
         let now = SystemTime::now();
         let pair1 = authenticator.create_token_pair(&user_id, now).await.unwrap();
-        let bearer_claims1 = authenticator.decode(pair1.bearer).unwrap().claims;
-        let refresh_claims1 = authenticator.decode(pair1.refresh).unwrap().claims;
+        let bearer_claims1 = authenticator.decode(&pair1.bearer).unwrap().claims;
+        let refresh_claims1 = authenticator.decode(&pair1.refresh).unwrap().claims;
         let now = SystemTime::now();
         let pair2 = authenticator.create_token_pair(&user_id, now).await.unwrap();
-        let bearer_claims2 = authenticator.decode(pair2.bearer).unwrap().claims;
-        let refresh_claims2 = authenticator.decode(pair2.refresh).unwrap().claims;
+        let bearer_claims2 = authenticator.decode(&pair2.bearer).unwrap().claims;
+        let refresh_claims2 = authenticator.decode(&pair2.refresh).unwrap().claims;
 
         assert_eq!(bearer_claims1.jti, refresh_claims1.jti);
         assert_eq!(bearer_claims2.jti, refresh_claims2.jti);
@@ -176,9 +168,9 @@ mod tests {
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
         let pair = authenticator1.create_token_pair(&user_id, now).await.unwrap();
-        let decoded = authenticator2.decode(pair.bearer).unwrap();
+        let decoded = authenticator2.decode(&pair.bearer).unwrap();
         assert_eq!(decoded.claims.sub, user_id);
-        let decoded = authenticator2.decode(pair.refresh).unwrap();
+        let decoded = authenticator2.decode(&pair.refresh).unwrap();
         assert_eq!(decoded.claims.sub, user_id);
     }
 
@@ -197,7 +189,7 @@ mod tests {
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
         let pair = authenticator1.create_token_pair(&user_id, now).await.unwrap();
-        let err = authenticator2.decode(pair.bearer).unwrap_err();
+        let err = authenticator2.decode(&pair.bearer).unwrap_err();
         assert_eq!(err, AuthApiError::JwtError);
     }
 
@@ -216,7 +208,7 @@ mod tests {
         let user_id = SimpleUser::generate_id();
         let now = SystemTime::now();
         let pair = authenticator1.create_token_pair(&user_id, now).await.unwrap();
-        let err = authenticator2.decode(pair.bearer).unwrap_err();
+        let err = authenticator2.decode(&pair.bearer).unwrap_err();
         assert_eq!(err, AuthApiError::JwtError);
     }
 
@@ -227,7 +219,7 @@ mod tests {
         let now = SystemTime::now();
         let token_pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
 
-        let decoded = authenticator.decode(token_pair.bearer).unwrap();
+        let decoded = authenticator.decode(&token_pair.bearer).unwrap();
         let claims = decoded.claims;
         let status = authenticator.status(&claims.jti).await;
         assert_eq!(status, JwtStatus::Outstanding);
@@ -240,7 +232,7 @@ mod tests {
         let now = SystemTime::now();
         let token_pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
 
-        let decoded = authenticator.decode(token_pair.refresh).unwrap();
+        let decoded = authenticator.decode(&token_pair.refresh).unwrap();
         let claims = decoded.claims;
         let status = authenticator.status(&claims.jti).await;
         assert_eq!(status, JwtStatus::Outstanding);
@@ -253,12 +245,12 @@ mod tests {
 
         let now = SystemTime::now();
         let pair1 = authenticator.create_token_pair(&user_id, now).await.unwrap();
-        let bearer_claims1 = authenticator.decode(pair1.bearer).unwrap().claims;
-        let refresh_claims1 = authenticator.decode(pair1.refresh.clone()).unwrap().claims;
+        let bearer_claims1 = authenticator.decode(&pair1.bearer).unwrap().claims;
+        let refresh_claims1 = authenticator.decode(&pair1.refresh.clone()).unwrap().claims;
 
         let pair2 = authenticator.refresh(pair1.refresh).await.unwrap();
-        let bearer_claims2 = authenticator.decode(pair2.bearer).unwrap().claims;
-        let refresh_claims2 = authenticator.decode(pair2.refresh.clone()).unwrap().claims;
+        let bearer_claims2 = authenticator.decode(&pair2.bearer).unwrap().claims;
+        let refresh_claims2 = authenticator.decode(&pair2.refresh).unwrap().claims;
 
         assert_ne!(bearer_claims1.jti, bearer_claims2.jti);
         assert_ne!(refresh_claims1.jti, refresh_claims2.jti);
@@ -295,7 +287,7 @@ mod tests {
         let time = SystemTime::now() - Duration::from_secs(61);
 
         let pair = authenticator.create_token_pair(&user_id, time).await.unwrap();
-        let err = authenticator.decode(pair.bearer.clone()).unwrap_err();
+        let err = authenticator.decode(&pair.bearer).unwrap_err();
         assert_eq!(err, AuthApiError::JwtError);
     }
 
@@ -312,7 +304,7 @@ mod tests {
         let authenticator: JwtAuthenticator<SimpleUser> = Default::default();
         let token = String::from("this_is_a_malformed_jwt");
 
-        let err = authenticator.decode(token).unwrap_err();
+        let err = authenticator.decode(&token).unwrap_err();
         assert_eq!(err, AuthApiError::JwtError);
     }
 
@@ -323,7 +315,7 @@ mod tests {
 
         let now = SystemTime::now();
         let pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
-        let claims = authenticator.decode(pair.refresh.clone()).unwrap().claims;
+        let claims = authenticator.decode(&pair.refresh).unwrap().claims;
         let jti = claims.jti;
         let result = authenticator.blacklist(pair.bearer).await.unwrap();
         assert_eq!(result, ());
@@ -338,7 +330,7 @@ mod tests {
 
         let now = SystemTime::now();
         let pair = authenticator.create_token_pair(&user_id, now).await.unwrap();
-        let claims = authenticator.decode(pair.bearer.clone()).unwrap().claims;
+        let claims = authenticator.decode(&pair.bearer).unwrap().claims;
         let jti = claims.jti;
         let result = authenticator.blacklist(pair.refresh).await.unwrap();
         assert_eq!(result, ());

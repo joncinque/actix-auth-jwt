@@ -22,7 +22,7 @@ pub fn config_data_factory<U>(config: AppConfig<U>) -> DataFactoryFunc<U>
         let authenticator = (config.authenticator)();
         let extractor = JwtUserIdConfig::<U> { authenticator: authenticator.clone() };
         Box::pin(async move {
-            user_repo.write().unwrap().start().await.unwrap();
+            user_repo.write().await.start().await.unwrap();
             Ok(AuthState { user_repo, hasher, sender, authenticator, extractor, })
         })
     })

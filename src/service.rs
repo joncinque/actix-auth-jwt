@@ -54,12 +54,12 @@ async fn register<U>(req: HttpRequest, registration: Json<U::RegisterDto>, data:
     user.set_password(hash);
 
     let id = format!("{}", user.id());
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     user_repo.insert(user).await?;
     let url = req.url_for("register-confirm", &[id]).unwrap();
     builder = builder.body(format!("Please go to {} to confirm your registration.", url));
 
-    let mut sender = data.sender.write().unwrap();
+    let mut sender = data.sender.write().await;
     sender.send(builder).await?;
 
     Ok(HttpResponse::Created().body(SUCCESS_MESSAGE))
@@ -70,12 +70,12 @@ async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
     where U: User, {
     let login = login.into_inner();
 
-    let user_repo = data.user_repo.read().unwrap();
+    let user_repo = data.user_repo.read().await;
     let key = U::Key::from(login.key);
     let user = user_repo.get_by_key(&key).await?;
     let verified = (data.hasher.verifier)(login.password, String::from(user.password())).await?;
     if verified {
-        let mut authenticator = data.authenticator.write().unwrap();
+        let mut authenticator = data.authenticator.write().await;
         let now = SystemTime::now();
         let token_pair = authenticator.create_token_pair(user.id(), now).await?;
         let bearer = token_pair.bearer;
@@ -89,7 +89,7 @@ async fn login<U>(login: Json<LoginUser>, data: Data<AuthState<U>>)
 
 async fn logout<U: User>(auth: BearerAuth, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError> {
-    let mut authenticator = data.authenticator.write().unwrap();
+    let mut authenticator = data.authenticator.write().await;
     authenticator.blacklist(auth.token().to_owned()).await?;
     Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
@@ -97,7 +97,7 @@ async fn logout<U: User>(auth: BearerAuth, data: Data<AuthState<U>>)
 async fn token_refresh<U: User>(token: Json<RefreshToken>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError> {
     let token = token.into_inner();
-    let mut authenticator = data.authenticator.write().unwrap();
+    let mut authenticator = data.authenticator.write().await;
     let pair = authenticator.refresh(token.refresh).await?;
     let bearer = pair.bearer;
     let refresh = pair.refresh;
@@ -107,8 +107,8 @@ async fn token_refresh<U: User>(token: Json<RefreshToken>, data: Data<AuthState<
 async fn token_status<U: User>(token: Json<TokenStatus>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError> {
     let token = token.into_inner().token;
-    let authenticator = data.authenticator.read().unwrap();
-    let data = authenticator.decode(token)?;
+    let authenticator = data.authenticator.read().await;
+    let data = authenticator.decode(&token)?;
     let jti = data.claims.jti;
     let status = authenticator.status(&jti).await;
     Ok(HttpResponse::Ok().json(TokenStatusResponse { status }))
@@ -117,7 +117,7 @@ async fn token_status<U: User>(token: Json<TokenStatus>, data: Data<AuthState<U>
 async fn register_confirm<U>(info: Path<ConfirmId>, data: Data<AuthState<U>>)
     -> Result<HttpResponse, AuthApiError>
     where U: User, {
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     let info = info.into_inner();
     let id = U::Id::from(info.id);
     user_repo.confirm(&id).await.map(|_| HttpResponse::Ok().body(SUCCESS_MESSAGE))
@@ -132,7 +132,7 @@ async fn password_reset_confirm<U>(
     reset.validate().map_err(errors::from_validation_errors)?;
     let info = info.into_inner();
     let now = SystemTime::now();
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     user_repo.password_reset_confirm(&info.id, reset.password1, now).await?;
     Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
@@ -141,7 +141,7 @@ async fn password_reset<U>(req: HttpRequest, reset: Json<ResetPassword>, data: D
     -> Result<HttpResponse, AuthApiError>
     where U: User, {
     let key = U::Key::from(reset.into_inner().key);
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     let now = SystemTime::now();
     let user = user_repo.get_by_key(&key).await?;
     let email = user.email().to_owned();
@@ -154,7 +154,7 @@ async fn password_reset<U>(req: HttpRequest, reset: Json<ResetPassword>, data: D
     let url = req.url_for("password-reset-confirm", &[reset_id]).unwrap();
     builder = builder.body(format!("Please go to {} to reset your password.", url));
 
-    let mut sender = data.sender.write().unwrap();
+    let mut sender = data.sender.write().await;
     sender.send(builder).await?;
     Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
@@ -163,7 +163,7 @@ async fn update<U: User>(update: Json<U::UpdateDto>, user: JwtUserId<U>, data: D
     -> Result<HttpResponse, AuthApiError> {
     let update = update.into_inner();
     update.validate().map_err(errors::from_validation_errors)?;
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     let id = user.user_id;
     let user = user_repo.get_by_id(&id).await?;
     let mut user = user.clone();
@@ -178,7 +178,7 @@ async fn password_update<U>(reset: Json<UpdatePassword>, user: JwtUserId<U>, dat
     where U: User, {
     let reset = reset.into_inner();
     reset.validate().map_err(errors::from_validation_errors)?;
-    let mut user_repo = data.user_repo.write().unwrap();
+    let mut user_repo = data.user_repo.write().await;
     let id = user.user_id;
     let user = user_repo.get_by_id(&id).await?;
     let verified = (data.hasher.verifier)(reset.old_password, String::from(user.password())).await?;
@@ -293,7 +293,7 @@ mod tests {
 
         let message;
         {
-            let confirmation = transport.write().unwrap().emails.remove(0);
+            let confirmation = transport.write().await.emails.remove(0);
             let tos = confirmation.envelope().to().to_vec();
             assert_eq!(tos.len(), 1);
             let to = format!("{}", tos[0]);
@@ -339,7 +339,7 @@ mod tests {
         ).await;
 
         let message = {
-            let confirmation = transport.write().unwrap().emails.remove(0);
+            let confirmation = transport.write().await.emails.remove(0);
             confirmation.message_to_string().unwrap()
         };
         let url = get_confirmation_url(&message);
@@ -461,7 +461,7 @@ mod tests {
         let resp = register_user(&email, &password, &password, state).await;
         assert_eq!(resp.status(), StatusCode::CREATED);
         {
-            let user_repo = user_repo.read().unwrap();
+            let user_repo = user_repo.read().await;
             let err = user_repo.get_by_key(&email).await.unwrap_err();
             assert!(matches!(err, AuthApiError::Unconfirmed { .. } ));
         }
@@ -530,7 +530,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -557,7 +557,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -576,7 +576,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -599,7 +599,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -618,7 +618,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -638,7 +638,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -659,7 +659,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -690,7 +690,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");
@@ -712,7 +712,7 @@ mod tests {
         let state: AuthState<SimpleUser> = Default::default();
         let sender = state.sender.clone();
         let transport = shareable_data(InMemoryTransport::default());
-        sender.write().unwrap().transport = transport.clone();
+        sender.write().await.transport = transport.clone();
 
         let email = String::from("test@example.com");
         let password = String::from("p@ssword");

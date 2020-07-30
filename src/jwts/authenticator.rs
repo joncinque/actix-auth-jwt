@@ -2,7 +2,6 @@
 
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
 use std::time::{SystemTime, Duration};
-use futures::future::LocalBoxFuture;
 
 use crate::jwts::types::{generate_jti, unix_timestamp, Jti, TokenType, Claims};
 use crate::jwts::base::{JwtBlacklist, JwtStatus};
@@ -73,8 +72,8 @@ impl<U> JwtAuthenticator<U> where U: User {
         }
     }
 
-    pub fn decode(&self, token: String) -> Result<TokenData<Claims<U>>, AuthApiError> {
-        decode::<Claims<U>>(&token, &self.decoding_key, &self.validation).map_err(|e| AuthApiError::from(e))
+    pub fn decode(&self, token: &str) -> Result<TokenData<Claims<U>>, AuthApiError> {
+        decode::<Claims<U>>(token, &self.decoding_key, &self.validation).map_err(|e| AuthApiError::from(e))
     }
 
     pub async fn create_token_pair(&mut self, id: &U::Id, time: SystemTime) -> Result<JwtPair, AuthApiError> {
@@ -83,24 +82,20 @@ impl<U> JwtAuthenticator<U> where U: User {
         let refresh = encode(&self.header, &refresh_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
         let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), time);
         let bearer = encode(&self.header, &bearer_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
-        self.blacklist.write().unwrap().insert_outstanding(refresh_claims).await?;
+        self.blacklist.write().await.insert_outstanding(refresh_claims).await?;
         Ok(JwtPair { bearer, refresh })
     }
 
     pub async fn status(&self, jti: &Jti) -> JwtStatus {
-        self.blacklist.read().unwrap().status(jti).await
-    }
-
-    pub fn status_static(&self, jti: &Jti) -> LocalBoxFuture<'static, JwtStatus> {
-        self.blacklist.read().unwrap().status_static(jti)
+        self.blacklist.read().await.status(jti).await
     }
 
     pub async fn blacklist(&mut self, token: String) -> Result<(), AuthApiError> {
-        let data = self.decode(token)?;
+        let data = self.decode(&token)?;
         let jti = data.claims.jti;
         match self.status(&jti).await {
             JwtStatus::Outstanding => {
-                self.blacklist.write().unwrap().blacklist(jti).await?;
+                self.blacklist.write().await.blacklist(jti).await?;
                 Ok(())
             },
             JwtStatus::NotFound => Err(AuthApiError::NotFound { key: jti }),
@@ -109,7 +104,7 @@ impl<U> JwtAuthenticator<U> where U: User {
     }
 
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {
-        let data = self.decode(refresh)?;
+        let data = self.decode(&refresh)?;
         if data.claims.token_type != TokenType::Refresh {
             return Err(AuthApiError::JwtError)
         }
@@ -117,7 +112,7 @@ impl<U> JwtAuthenticator<U> where U: User {
         let id = data.claims.sub;
         match self.status(&jti).await {
             JwtStatus::Outstanding => {
-                self.blacklist.write().unwrap().blacklist(jti).await?;
+                self.blacklist.write().await.blacklist(jti).await?;
                 let now = SystemTime::now();
                 self.create_token_pair(&id, now).await
             },

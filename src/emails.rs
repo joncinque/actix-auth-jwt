@@ -24,7 +24,7 @@ impl EmailSender {
             .build()
             .map_err(errors::from_lettre)?;
 
-        self.transport.write().unwrap().send(email.into()).map_err(errors::from_empty)
+        self.transport.write().await.send(email.into()).map_err(errors::from_empty)
     }
 }
 
@@ -51,7 +51,7 @@ mod tests {
         let email = EmailBuilder::new().to(to).body(body);
         sender.send(email).await.unwrap();
 
-        let transport = transport.read().unwrap();
+        let transport = transport.read().await;
         assert_eq!(transport.emails.len(), 1);
     }
 }

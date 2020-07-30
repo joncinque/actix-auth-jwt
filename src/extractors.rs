@@ -4,7 +4,9 @@ use actix_http::Payload;
 use actix_http::http::header::Header;
 use actix_web::{Error, HttpRequest, FromRequest};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
-use futures::future::{ok, err, FutureExt, LocalBoxFuture};
+use futures::future::{err, FutureExt};
+use std::pin::Pin;
+use std::future::Future;
 
 use crate::errors::AuthApiError;
 use crate::models::base::User;
@@ -20,35 +22,46 @@ pub struct JwtUserId<U>
 }
 
 #[inline]
-fn decode<U: User>(req: &HttpRequest, authenticator: &JwtAuthenticator<U>) -> Result<Claims<U>, Error> {
-    let bearer = Authorization::<Bearer>::parse(req)?;
-    let token = bearer.into_scheme().token().to_string();
+fn decode<U: User>(token: &str, authenticator: &JwtAuthenticator<U>) -> Result<Claims<U>, Error> {
     let decoded = authenticator.decode(token)?;
     Ok(decoded.claims)
+}
+
+#[inline]
+fn bearer_token(req: &HttpRequest) -> Result<String, Error> {
+    let bearer = Authorization::<Bearer>::parse(req)?;
+    Ok(bearer.into_scheme().token().to_string())
 }
 
 impl<U> FromRequest for JwtUserId<U>
     where U: User + 'static {
     type Config = JwtUserIdConfig<U>;
     type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Error>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Error>>>>;
 
     #[inline]
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         let config = req.app_data::<Self::Config>();
         match config {
             Some(config) => {
-                let authenticator = config.authenticator.read().unwrap();
-                match decode(req, &authenticator) {
-                    Ok(decoded) => {
-                        let jti = decoded.jti;
-                        let user_id = decoded.sub;
-                        authenticator.status_static(&jti)
-                            .then(|status| match status {
-                                JwtStatus::Outstanding => ok(JwtUserId { user_id }),
-                                _ => err(AuthApiError::JwtError.into()),
-                            }).boxed_local()
-                    },
+                let authenticator = config.authenticator.clone();
+                match bearer_token(req) {
+                    Ok(token) =>
+                        Box::pin(async move {
+                            let authenticator = authenticator.read().await;
+                            match decode(&token, &authenticator) {
+                                Ok(decoded) => {
+                                    let jti = decoded.jti;
+                                    let user_id = decoded.sub;
+                                    let status = authenticator.status(&jti).await;
+                                    match status {
+                                        JwtStatus::Outstanding => Ok(JwtUserId { user_id }),
+                                        _ => Err(AuthApiError::JwtError.into()),
+                                    }
+                                },
+                                Err(error) => Err(error),
+                            }
+                        }),
                     Err(error) => err(error).boxed_local(),
                 }
             },
@@ -107,7 +120,7 @@ mod tests {
         let authenticator = shareable_data(authenticator);
         let now = SystemTime::now();
         let user_id = SimpleUser::generate_id();
-        let token_pair = authenticator.write().unwrap().create_token_pair(&user_id, now).await.unwrap();
+        let token_pair = authenticator.write().await.create_token_pair(&user_id, now).await.unwrap();
         let (req, mut pl) =
             TestRequest::default()
                 .header(AUTHORIZATION, format!("Bearer {}", token_pair.bearer))
@@ -140,8 +153,8 @@ mod tests {
         let authenticator = shareable_data(authenticator);
         let now = SystemTime::now();
         let user_id = SimpleUser::generate_id();
-        let token_pair = authenticator.write().unwrap().create_token_pair(&user_id, now).await.unwrap();
-        let new_pair = authenticator.write().unwrap().refresh(token_pair.refresh).await.unwrap();
+        let token_pair = authenticator.write().await.create_token_pair(&user_id, now).await.unwrap();
+        let new_pair = authenticator.write().await.refresh(token_pair.refresh).await.unwrap();
 
         let (req, mut pl) =
             TestRequest::default()
