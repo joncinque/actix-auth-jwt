@@ -135,8 +135,6 @@ environment variables for configuration
 * Update `lettre` to version 0.10 with new email builder
 * Transition `lettre` email sending to async once tokio is supported
 * Update password hashing to async, which is currently very slow
-* Use `tokio::sync::RwLock` instead of a normal `RwLock` once they no longer
-require `Sized`, see [GitHub issue](https://github.com/tokio-rs/tokio/issues/2209)
 * Add example with customized `AppConfig`
 * Add example with customized `User` type and user update routes
 * Add example with customized `UserRepo` for another database provider

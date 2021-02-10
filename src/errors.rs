@@ -1,13 +1,13 @@
-use actix_web::HttpResponse;
 use actix_web::error::ResponseError;
 use actix_web::http::{header, StatusCode};
+use actix_web::HttpResponse;
 use argon2::Error as Argon2Error;
 use failure::Fail;
 use lettre_email::error::Error as LettreError;
+use mongodb::error::{Error as MongoError, ErrorKind};
 use rand::Error as RandError;
-use validator::{ValidationError, ValidationErrors};
-use mongodb::error::{ErrorKind, Error as MongoError};
 use regex::Regex;
+use validator::{ValidationError, ValidationErrors};
 
 /// Domain-specific errors with any extra information required
 #[derive(Fail, Debug, PartialEq)]
@@ -37,15 +37,27 @@ pub enum AuthApiError {
 }
 
 fn into_str(error: &Vec<ValidationError>) -> String {
-    error.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join("\n")
+    error
+        .iter()
+        .map(|e| format!("{}", e))
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 /// TODO change this to a From impl
 pub fn from_validation_errors(errors: ValidationErrors) -> AuthApiError {
     let field_errors = errors.field_errors();
     AuthApiError::ValidationErrors {
-        fields: field_errors.keys().map(|f| f.to_string()).collect::<Vec<String>>().join(", "),
-        errors: field_errors.values().map(|e| format!("{}", into_str(e))).collect::<Vec<String>>().join("\n"),
+        fields: field_errors
+            .keys()
+            .map(|f| f.to_string())
+            .collect::<Vec<String>>()
+            .join(", "),
+        errors: field_errors
+            .values()
+            .map(|e| format!("{}", into_str(e)))
+            .collect::<Vec<String>>()
+            .join("\n"),
     }
 }
 
@@ -80,26 +92,22 @@ const DUPLICATE_WRITE_ERROR: i32 = 11000;
 impl From<MongoError> for AuthApiError {
     fn from(error: MongoError) -> AuthApiError {
         match error.kind.as_ref() {
-            ErrorKind::WriteError(f) => {
-                match f {
-                    mongodb::error::WriteFailure::WriteError(we) => {
-                        match we.code {
-                            DUPLICATE_WRITE_ERROR => {
-                                let re = Regex::new("dup key.*\"(.*)\"").unwrap();
-                                println!("{}", &we.message);
-                                match re.captures(&we.message) {
-                                    None => AuthApiError::InternalError,
-                                    Some(caps) => {
-                                        let key = caps.get(1).map_or("", |m| m.as_str()).to_owned();
-                                        AuthApiError::AlreadyExists { key }
-                                    }
-                                }
-                            },
-                            _ => AuthApiError::InternalError,
+            ErrorKind::WriteError(f) => match f {
+                mongodb::error::WriteFailure::WriteError(we) => match we.code {
+                    DUPLICATE_WRITE_ERROR => {
+                        let re = Regex::new("dup key.*\"(.*)\"").unwrap();
+                        println!("{}", &we.message);
+                        match re.captures(&we.message) {
+                            None => AuthApiError::InternalError,
+                            Some(caps) => {
+                                let key = caps.get(1).map_or("", |m| m.as_str()).to_owned();
+                                AuthApiError::AlreadyExists { key }
+                            }
                         }
                     }
                     _ => AuthApiError::InternalError,
-                }
+                },
+                _ => AuthApiError::InternalError,
             },
             _ => AuthApiError::InternalError,
         }

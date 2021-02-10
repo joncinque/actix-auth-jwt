@@ -1,12 +1,14 @@
 //! Manager for all JWT related operations, wrapping a blacklist
 
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey, TokenData};
-use std::time::{SystemTime, Duration};
+use jsonwebtoken::{
+    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
+};
+use std::time::{Duration, SystemTime};
 
-use crate::jwts::types::{generate_jti, unix_timestamp, Jti, TokenType, Claims};
+use crate::errors::AuthApiError;
 use crate::jwts::base::{JwtBlacklist, JwtStatus};
 use crate::jwts::inmemory::InMemoryJwtBlacklist;
-use crate::errors::AuthApiError;
+use crate::jwts::types::{generate_jti, unix_timestamp, Claims, Jti, TokenType};
 use crate::models::base::User;
 use crate::types::{shareable_data, ShareableData};
 
@@ -39,7 +41,10 @@ pub struct JwtAuthenticator<U: User> {
     blacklist: ShareableData<dyn JwtBlacklist<U>>,
 }
 
-impl<U> JwtAuthenticator<U> where U: User {
+impl<U> JwtAuthenticator<U>
+where
+    U: User,
+{
     fn new_refresh_claims(&self, jti: Jti, id: U::Id, time: SystemTime) -> Claims<U> {
         let iat = unix_timestamp(time);
         let exp = unix_timestamp(time + self.refresh_token_lifetime);
@@ -73,16 +78,27 @@ impl<U> JwtAuthenticator<U> where U: User {
     }
 
     pub fn decode(&self, token: &str) -> Result<TokenData<Claims<U>>, AuthApiError> {
-        decode::<Claims<U>>(token, &self.decoding_key, &self.validation).map_err(|e| AuthApiError::from(e))
+        decode::<Claims<U>>(token, &self.decoding_key, &self.validation)
+            .map_err(|e| AuthApiError::from(e))
     }
 
-    pub async fn create_token_pair(&mut self, id: &U::Id, time: SystemTime) -> Result<JwtPair, AuthApiError> {
+    pub async fn create_token_pair(
+        &mut self,
+        id: &U::Id,
+        time: SystemTime,
+    ) -> Result<JwtPair, AuthApiError> {
         let jti = generate_jti();
         let refresh_claims = self.new_refresh_claims(jti.clone(), id.clone(), time);
-        let refresh = encode(&self.header, &refresh_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
+        let refresh = encode(&self.header, &refresh_claims, &self.encoding_key)
+            .map_err(|e| AuthApiError::from(e))?;
         let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), time);
-        let bearer = encode(&self.header, &bearer_claims, &self.encoding_key).map_err(|e| AuthApiError::from(e))?;
-        self.blacklist.write().await.insert_outstanding(refresh_claims).await?;
+        let bearer = encode(&self.header, &bearer_claims, &self.encoding_key)
+            .map_err(|e| AuthApiError::from(e))?;
+        self.blacklist
+            .write()
+            .await
+            .insert_outstanding(refresh_claims)
+            .await?;
         Ok(JwtPair { bearer, refresh })
     }
 
@@ -97,7 +113,7 @@ impl<U> JwtAuthenticator<U> where U: User {
             JwtStatus::Outstanding => {
                 self.blacklist.write().await.blacklist(jti).await?;
                 Ok(())
-            },
+            }
             JwtStatus::NotFound => Err(AuthApiError::NotFound { key: jti }),
             JwtStatus::Blacklisted => Err(AuthApiError::AlreadyUsed),
         }
@@ -106,7 +122,7 @@ impl<U> JwtAuthenticator<U> where U: User {
     pub async fn refresh(&mut self, refresh: String) -> Result<JwtPair, AuthApiError> {
         let data = self.decode(&refresh)?;
         if data.claims.token_type != TokenType::Refresh {
-            return Err(AuthApiError::JwtError)
+            return Err(AuthApiError::JwtError);
         }
         let jti = data.claims.jti;
         let id = data.claims.sub;
@@ -115,7 +131,7 @@ impl<U> JwtAuthenticator<U> where U: User {
                 self.blacklist.write().await.blacklist(jti).await?;
                 let now = SystemTime::now();
                 self.create_token_pair(&id, now).await
-            },
+            }
             JwtStatus::NotFound => Err(AuthApiError::NotFound { key: jti }),
             JwtStatus::Blacklisted => Err(AuthApiError::AlreadyUsed),
         }
@@ -127,7 +143,8 @@ impl<U> JwtAuthenticator<U> where U: User {
         secret: String,
         bearer_token_lifetime: Duration,
         refresh_token_lifetime: Duration,
-        blacklist: ShareableData<dyn JwtBlacklist<U>>) -> Self {
+        blacklist: ShareableData<dyn JwtBlacklist<U>>,
+    ) -> Self {
         let header = Header::new(alg);
         let validation = Validation::new(alg);
         let encoding_key = EncodingKey::from_secret(secret.as_bytes());
@@ -145,7 +162,10 @@ impl<U> JwtAuthenticator<U> where U: User {
     }
 }
 
-impl<U> Default for JwtAuthenticator<U> where U: User + 'static {
+impl<U> Default for JwtAuthenticator<U>
+where
+    U: User + 'static,
+{
     fn default() -> Self {
         let iss = String::from("issuer");
         let alg = Algorithm::HS256;
@@ -159,6 +179,7 @@ impl<U> Default for JwtAuthenticator<U> where U: User + 'static {
             secret,
             bearer_token_lifetime,
             refresh_token_lifetime,
-            shareable_data(blacklist))
+            shareable_data(blacklist),
+        )
     }
 }

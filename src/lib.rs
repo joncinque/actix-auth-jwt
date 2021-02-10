@@ -1,9 +1,9 @@
 pub mod app;
 pub mod config;
+pub mod dtos;
 pub mod emails;
 pub mod errors;
 pub mod extractors;
-pub mod dtos;
 pub mod jwts;
 pub mod models;
 pub mod passwords;

@@ -1,10 +1,10 @@
 use actix_web::web::{self, ServiceConfig};
 
 use crate::config::AppConfig;
+use crate::extractors::JwtUserIdConfig;
+use crate::models::base::User;
 use crate::service::auth_service;
 use crate::state::AuthState;
-use crate::models::base::User;
-use crate::extractors::JwtUserIdConfig;
 
 use crate::types::PinFutureObj;
 
@@ -14,23 +14,35 @@ pub type DataFactoryFunc<U> = Box<dyn Fn() -> PinFutureObj<std::io::Result<AuthS
 /// routes within the service.  Since actix may create multiple versions of this
 /// across tasks and threads, everything must be Box'ed and Pin'ed safely.
 pub fn config_data_factory<U>(config: AppConfig<U>) -> DataFactoryFunc<U>
-    where U: User + 'static, {
+where
+    U: User + 'static,
+{
     Box::new(move || {
         let user_repo = (config.user_repo)();
         let hasher = (config.hasher)();
         let sender = (config.sender)();
         let authenticator = (config.authenticator)();
-        let extractor = JwtUserIdConfig::<U> { authenticator: authenticator.clone() };
+        let extractor = JwtUserIdConfig::<U> {
+            authenticator: authenticator.clone(),
+        };
         Box::pin(async move {
             user_repo.write().await.start().await.unwrap();
-            Ok(AuthState { user_repo, hasher, sender, authenticator, extractor, })
+            Ok(AuthState {
+                user_repo,
+                hasher,
+                sender,
+                authenticator,
+                extractor,
+            })
         })
     })
 }
 
 /// Actix-specific helper for adding the auth service's routes to the app
 pub fn config_app<U>() -> Box<dyn Fn(&mut ServiceConfig)>
-    where U: User + 'static, {
+where
+    U: User + 'static,
+{
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.service(auth_service::<U>(web::scope("/auth")));
     })

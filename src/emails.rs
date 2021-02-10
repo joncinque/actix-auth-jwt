@@ -1,7 +1,7 @@
 use lettre_email::EmailBuilder;
 
 use crate::errors::{self, AuthApiError};
-use crate::transports::{InMemoryTransport, EmptyResultTransport};
+use crate::transports::{EmptyResultTransport, InMemoryTransport};
 use crate::types::{shareable_data, ShareableData};
 
 /// Wrapper around lettre transport to generalize transports for the app, and
@@ -24,7 +24,11 @@ impl EmailSender {
             .build()
             .map_err(errors::from_lettre)?;
 
-        self.transport.write().await.send(email.into()).map_err(errors::from_empty)
+        self.transport
+            .write()
+            .await
+            .send(email.into())
+            .map_err(errors::from_empty)
     }
 }
 
@@ -38,8 +42,8 @@ impl Default for EmailSender {
 
 #[cfg(test)]
 mod tests {
-    use crate::transports::InMemoryTransport;
     use super::*;
+    use crate::transports::InMemoryTransport;
 
     #[actix_rt::test]
     async fn inmemory_sender() {

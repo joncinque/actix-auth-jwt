@@ -1,13 +1,13 @@
 //! Sample in-memory implementation of UserRepo
 
 use async_trait::async_trait;
-use uuid::Uuid;
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::{Entry, HashMap};
 use std::time::{Duration, SystemTime};
+use uuid::Uuid;
 
 use crate::errors::AuthApiError;
+use crate::models::base::{Status, User};
 use crate::repos::base::UserRepo;
-use crate::models::base::{User, Status};
 
 pub struct InMemoryUserRepo<U: User> {
     users_by_id: HashMap<U::Id, U>,
@@ -41,32 +41,40 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
     }
 
     async fn get_by_key(&self, key: &U::Key) -> Result<U, AuthApiError> {
-        let user_id = self.users_by_key.get(key).ok_or(AuthApiError::NotFound { key: format!("{}", key) })?;
+        let user_id = self.users_by_key.get(key).ok_or(AuthApiError::NotFound {
+            key: format!("{}", key),
+        })?;
         self.get_by_id(user_id).await
     }
 
     async fn get_by_id(&self, id: &U::Id) -> Result<U, AuthApiError> {
-        let user = self.users_by_id.get(id).ok_or(AuthApiError::NotFound { key: format!("{}", id) })?;
+        let user = self.users_by_id.get(id).ok_or(AuthApiError::NotFound {
+            key: format!("{}", id),
+        })?;
         match *user.status() {
             Status::Confirmed => Ok(user.clone()),
-            Status::Unconfirmed => Err(AuthApiError::Unconfirmed { key: format!("{}", id) }),
+            Status::Unconfirmed => Err(AuthApiError::Unconfirmed {
+                key: format!("{}", id),
+            }),
             Status::Suspended => Err(AuthApiError::Unauthorized),
-            Status::Deleted => Err(AuthApiError::NotFound { key: format!("{}", id) }),
+            Status::Deleted => Err(AuthApiError::NotFound {
+                key: format!("{}", id),
+            }),
         }
     }
 
     async fn insert(&mut self, user: U) -> Result<(), AuthApiError> {
         let key = user.key().clone();
         match self.users_by_key.entry(key) {
-            Entry::Occupied(e) => Err(
-                AuthApiError::AlreadyExists { key: format!("{}", e.key()) }
-            ),
+            Entry::Occupied(e) => Err(AuthApiError::AlreadyExists {
+                key: format!("{}", e.key()),
+            }),
             Entry::Vacant(e) => {
                 let id = user.id().clone();
                 match self.users_by_id.entry(id) {
-                    Entry::Occupied(f) => Err(
-                        AuthApiError::AlreadyExists { key: format!("{}", f.key()) }
-                    ),
+                    Entry::Occupied(f) => Err(AuthApiError::AlreadyExists {
+                        key: format!("{}", f.key()),
+                    }),
                     Entry::Vacant(f) => {
                         e.insert(user.id().clone());
                         f.insert(user);
@@ -87,11 +95,11 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
                 } else {
                     Err(AuthApiError::AlreadyUsed)
                 }
-            },
+            }
             Entry::Vacant(e) => {
                 let key = format!("{}", e.into_key());
                 Err(AuthApiError::NotFound { key })
-            },
+            }
         }
     }
 
@@ -100,10 +108,10 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
             Some(v) => {
                 self.users_by_key.remove(v.key());
                 Ok(())
-            },
-            None => {
-                Err(AuthApiError::NotFound { key: format!("{}", id) })
             }
+            None => Err(AuthApiError::NotFound {
+                key: format!("{}", id),
+            }),
         }
     }
 
@@ -119,21 +127,37 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
                 }
                 e.insert(user);
                 Ok(())
-            },
-            Entry::Vacant(e) => Err(AuthApiError::NotFound { key: format!("{}", e.key()) }),
+            }
+            Entry::Vacant(e) => Err(AuthApiError::NotFound {
+                key: format!("{}", e.key()),
+            }),
         }
     }
 
-    async fn password_reset(&mut self, key: &U::Key, time: SystemTime) -> Result<String, AuthApiError> {
+    async fn password_reset(
+        &mut self,
+        key: &U::Key,
+        time: SystemTime,
+    ) -> Result<String, AuthApiError> {
         let user_id = self.get_by_key(key).await.map(|user| user.id().clone())?;
         let reset_id = Uuid::new_v4().to_string();
-        self.password_resets.insert(reset_id.clone(), (time, user_id));
+        self.password_resets
+            .insert(reset_id.clone(), (time, user_id));
         Ok(reset_id)
     }
 
-    async fn password_reset_confirm(&mut self, reset_id: &str, password: String, time: SystemTime) -> Result<(), AuthApiError> {
-        let time_id_tuple = self.password_resets.remove(reset_id)
-            .ok_or(AuthApiError::NotFound { key: reset_id.to_owned() })?;
+    async fn password_reset_confirm(
+        &mut self,
+        reset_id: &str,
+        password: String,
+        time: SystemTime,
+    ) -> Result<(), AuthApiError> {
+        let time_id_tuple =
+            self.password_resets
+                .remove(reset_id)
+                .ok_or(AuthApiError::NotFound {
+                    key: reset_id.to_owned(),
+                })?;
         let reset_time = time_id_tuple.0;
         let user_id = time_id_tuple.1;
         if (reset_time + Duration::from_secs(10 * 60)) < time {

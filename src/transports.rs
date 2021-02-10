@@ -19,10 +19,7 @@ pub struct InMemoryTransport {
 impl InMemoryTransport {
     pub fn new(response: EmptyResult) -> Self {
         let emails = Vec::new();
-        InMemoryTransport {
-            emails,
-            response,
-        }
+        InMemoryTransport { emails, response }
     }
 }
 

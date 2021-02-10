@@ -1,9 +1,9 @@
 //! All User info, to be implemented by custom User classes
 
-use std::hash::Hash;
-use std::fmt::{Debug, Display};
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display};
+use std::hash::Hash;
 use validator::Validate;
 
 /// Different states that a user could be in,
@@ -20,7 +20,9 @@ pub enum Status {
 /// deserialize, copy, and update the User.  Everything else is templated based
 /// on this User, so the system makes good use of the type-checker.
 pub trait User
-    where Self: Clone + Serialize + DeserializeOwned + Send + Sync {
+where
+    Self: Clone + Serialize + DeserializeOwned + Send + Sync,
+{
     /// User-provided key.  This could be a username or email address, and must
     /// be unique for the UserRepo to work.
     type Key: Clone + Eq + Hash + Display + From<String> + Send + Sync;

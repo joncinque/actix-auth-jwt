@@ -6,7 +6,7 @@ use uuid::Uuid;
 use validator::Validate;
 use validator_derive::Validate;
 
-use crate::models::base::{User, Status};
+use crate::models::base::{Status, User};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimpleUser {
@@ -48,11 +48,21 @@ impl User for SimpleUser {
     type Key = String;
     type Id = String;
 
-    fn key(&self) -> &Self::Key { &self.email }
-    fn id(&self) -> &Self::Id { &self.id }
-    fn email(&self) -> &str { &self.email }
-    fn status(&self) -> &Status { &self.status }
-    fn password(&self) -> &str { self.password.as_str() }
+    fn key(&self) -> &Self::Key {
+        &self.email
+    }
+    fn id(&self) -> &Self::Id {
+        &self.id
+    }
+    fn email(&self) -> &str {
+        &self.email
+    }
+    fn status(&self) -> &Status {
+        &self.status
+    }
+    fn password(&self) -> &str {
+        self.password.as_str()
+    }
 
     fn key_field() -> &'static str {
         "email"

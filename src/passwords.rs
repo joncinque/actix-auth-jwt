@@ -1,6 +1,6 @@
 use argon2::{self, Config};
-use rand::rngs::ThreadRng;
 use rand::prelude::*;
+use rand::rngs::ThreadRng;
 
 use crate::errors::{self, AuthApiError};
 use crate::types::PinFutureObj;
@@ -35,20 +35,12 @@ impl Default for PasswordHasher {
 
 /// Test hasher that does nothing
 pub fn empty_password_hasher() -> Hasher {
-    Box::new(|password| {
-        Box::pin(async move {
-            Ok(format!("{}", password))
-        })
-    })
+    Box::new(|password| Box::pin(async move { Ok(format!("{}", password)) }))
 }
 
 /// Test verifier that does nothing
 pub fn empty_password_verifier() -> Verifier {
-    Box::new(|password, hash| {
-        Box::pin(async move {
-            Ok(format!("{}", password) == hash)
-        })
-    })
+    Box::new(|password, hash| Box::pin(async move { Ok(format!("{}", password) == hash) }))
 }
 
 fn random_salt(len: u32, rng: &mut ThreadRng) -> Result<Vec<u8>, AuthApiError> {
@@ -68,8 +60,7 @@ pub fn argon2_password_hasher(secret_key: String) -> Hasher {
             config.secret = secret_key.as_bytes();
             let salt = random_salt(32, &mut rng)?;
             let password = password.as_bytes();
-            argon2::hash_encoded(password, &salt, &config)
-                .map_err(errors::from_argon_error)
+            argon2::hash_encoded(password, &salt, &config).map_err(errors::from_argon_error)
         })
     })
 }

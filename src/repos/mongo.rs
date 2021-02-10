@@ -1,14 +1,14 @@
 //! MongoDB implementation of UserRepo, for actual production use
 
 use async_trait::async_trait;
+use bson::{doc, Bson, Document};
+use mongodb::{Client, Collection, Database};
 use std::marker::PhantomData;
 use std::time::{Duration, SystemTime};
-use mongodb::{Client, Collection, Database};
-use bson::{doc, Bson, Document};
 
 use crate::errors::AuthApiError;
+use crate::models::base::{Status, User};
 use crate::repos::base::UserRepo;
-use crate::models::base::{User, Status};
 
 pub struct MongoRepo<U: User> {
     client: Option<Client>,
@@ -26,7 +26,15 @@ impl<U: User> MongoRepo<U> {
         let client = None;
         let db = None;
         let coll = None;
-        Self { client, db, coll, uri, db_name, coll_name, phantom, }
+        Self {
+            client,
+            db,
+            coll,
+            uri,
+            db_name,
+            coll_name,
+            phantom,
+        }
     }
 
     fn get_user_collection(&self) -> Result<&Collection, AuthApiError> {
@@ -38,22 +46,31 @@ impl<U: User> MongoRepo<U> {
 
         match serialized {
             Bson::Document(v) => Ok(v),
-            _ => Err(AuthApiError::ConfigurationError { key: "User not serializable".to_owned() })
+            _ => Err(AuthApiError::ConfigurationError {
+                key: "User not serializable".to_owned(),
+            }),
         }
     }
 
     fn check_user_status(&self, user: U) -> Result<U, AuthApiError> {
         match *user.status() {
             Status::Confirmed => Ok(user),
-            Status::Unconfirmed => Err(AuthApiError::Unconfirmed { key: format!("{}", user.key()) }),
+            Status::Unconfirmed => Err(AuthApiError::Unconfirmed {
+                key: format!("{}", user.key()),
+            }),
             Status::Suspended => Err(AuthApiError::Unauthorized),
-            Status::Deleted => Err(AuthApiError::NotFound { key: format!("{}", user.key()) }),
+            Status::Deleted => Err(AuthApiError::NotFound {
+                key: format!("{}", user.key()),
+            }),
         }
     }
 
     /// Testing function to drop collection between test runs
     pub async fn drop(&self) -> Result<(), AuthApiError> {
-        self.get_user_collection().unwrap().drop(None).await
+        self.get_user_collection()
+            .unwrap()
+            .drop(None)
+            .await
             .map_err(|e| AuthApiError::from(e))
     }
 }
@@ -70,7 +87,9 @@ impl<U: User> Default for MongoRepo<U> {
 #[async_trait]
 impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn start(&mut self) -> Result<(), AuthApiError> {
-        let client = Client::with_uri_str(&self.uri).await.map_err(|e| AuthApiError::from(e))?;
+        let client = Client::with_uri_str(&self.uri)
+            .await
+            .map_err(|e| AuthApiError::from(e))?;
         let db = client.database(&self.db_name);
         let indexes = doc! {
             "createIndexes": self.coll_name.clone(),
@@ -97,7 +116,9 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn get_by_key(&self, key: &U::Key) -> Result<U, AuthApiError> {
         let coll = self.get_user_collection()?;
         let key = format!("{}", key);
-        let user_doc: Document = coll.find_one(doc! { U::key_field(): key.clone() }, None).await?
+        let user_doc: Document = coll
+            .find_one(doc! { U::key_field(): key.clone() }, None)
+            .await?
             .ok_or(AuthApiError::NotFound { key })?;
         let user = bson::from_bson(user_doc.into()).map_err(|e| AuthApiError::from(e))?;
         self.check_user_status(user)
@@ -106,7 +127,9 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn get_by_id(&self, id: &U::Id) -> Result<U, AuthApiError> {
         let coll = self.get_user_collection()?;
         let key = format!("{}", id);
-        let user_doc: Document = coll.find_one(doc! { U::id_field(): key.clone() }, None).await?
+        let user_doc: Document = coll
+            .find_one(doc! { U::id_field(): key.clone() }, None)
+            .await?
             .ok_or(AuthApiError::NotFound { key })?;
         let user = bson::from_bson(user_doc.into()).map_err(|e| AuthApiError::from(e))?;
         self.check_user_status(user)
@@ -115,7 +138,8 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn insert(&mut self, user: U) -> Result<(), AuthApiError> {
         let coll = self.get_user_collection()?;
         let doc = self.get_user_document(&user)?;
-        coll.insert_one(doc, None).await
+        coll.insert_one(doc, None)
+            .await
             .map(|_r| ())
             .map_err(|e| AuthApiError::from(e))
     }
@@ -129,11 +153,15 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         let update = doc! {
             "$set": { U::status_field(): confirmed, }
         };
-        let result = coll.update_one(query, update, None).await
+        let result = coll
+            .update_one(query, update, None)
+            .await
             .map_err(|e| AuthApiError::from(e))?;
         match result.modified_count {
             1 => Ok(()),
-            0 => Err(AuthApiError::NotFound { key: format!("{}", id) }),
+            0 => Err(AuthApiError::NotFound {
+                key: format!("{}", id),
+            }),
             _ => Err(AuthApiError::InternalError),
         }
     }
@@ -143,11 +171,15 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         let doc = doc! {
             U::id_field(): format!("{}", id)
         };
-        let result = coll.delete_one(doc, None).await
+        let result = coll
+            .delete_one(doc, None)
+            .await
             .map_err(|e| AuthApiError::from(e))?;
         match result.deleted_count {
             1 => Ok(()),
-            0 => Err(AuthApiError::NotFound { key: format!("{}", id) }),
+            0 => Err(AuthApiError::NotFound {
+                key: format!("{}", id),
+            }),
             _ => Err(AuthApiError::InternalError),
         }
     }
@@ -158,20 +190,33 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
             U::id_field(): format!("{}", user.id())
         };
         let update = self.get_user_document(&user)?;
-        let result = coll.update_one(query, update, None).await
+        let result = coll
+            .update_one(query, update, None)
+            .await
             .map_err(|e| AuthApiError::from(e))?;
         match result.modified_count {
             1 => Ok(()),
-            0 => Err(AuthApiError::NotFound { key: format!("{}", user.id()) }),
+            0 => Err(AuthApiError::NotFound {
+                key: format!("{}", user.id()),
+            }),
             _ => Err(AuthApiError::InternalError),
         }
     }
 
-    async fn password_reset(&mut self, key: &U::Key, time: SystemTime) -> Result<String, AuthApiError> {
+    async fn password_reset(
+        &mut self,
+        key: &U::Key,
+        time: SystemTime,
+    ) -> Result<String, AuthApiError> {
         Err(AuthApiError::InternalError)
     }
 
-    async fn password_reset_confirm(&mut self, reset_id: &str, password: String, time: SystemTime) -> Result<(), AuthApiError> {
+    async fn password_reset_confirm(
+        &mut self,
+        reset_id: &str,
+        password: String,
+        time: SystemTime,
+    ) -> Result<(), AuthApiError> {
         Err(AuthApiError::InternalError)
     }
 }

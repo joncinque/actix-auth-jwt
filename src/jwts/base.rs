@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::jwts::types::{Jti, Claims};
 use crate::errors::AuthApiError;
+use crate::jwts::types::{Claims, Jti};
 use crate::models::base::User;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -17,7 +17,9 @@ pub enum JwtStatus {
 /// Trait for a repository of JWTs that have been created by the system
 #[async_trait]
 pub trait JwtBlacklist<U>
-    where U: User {
+where
+    U: User,
+{
     /// Get the status of a token based only on its JTI
     async fn status(&self, jti: &Jti) -> JwtStatus;
     /// Move the token from outstanding to the blacklist

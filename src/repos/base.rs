@@ -8,7 +8,10 @@ use crate::models::base::User;
 
 /// UserRepo contains all of the requirements for managing a user
 #[async_trait]
-pub trait UserRepo<U> where U: User {
+pub trait UserRepo<U>
+where
+    U: User,
+{
     /// Initiate any connections to make the repo usable.  Assume that this is
     /// called before anything happens in the system.
     async fn start(&mut self) -> Result<(), AuthApiError>;
@@ -29,12 +32,21 @@ pub trait UserRepo<U> where U: User {
 
     /// Reset user password without being logged in, used for forgotten passwords.
     /// The time parameter is used to expire a reset requests later.
-    async fn password_reset(&mut self, key: &U::Key, time: SystemTime) -> Result<String, AuthApiError>;
+    async fn password_reset(
+        &mut self,
+        key: &U::Key,
+        time: SystemTime,
+    ) -> Result<String, AuthApiError>;
     /// Confirm the reset of the password, along with the new password.  If the
     /// provided time is more than 10 minutes after the initial request, the
     /// reset will fail.
     /// TODO allow for tweaking the 10 minute reset
-    async fn password_reset_confirm(&mut self, id: &str, password: String, time: SystemTime) -> Result<(), AuthApiError>;
+    async fn password_reset_confirm(
+        &mut self,
+        id: &str,
+        password: String,
+        time: SystemTime,
+    ) -> Result<(), AuthApiError>;
 }
 
 #[cfg(test)]
@@ -46,7 +58,11 @@ pub mod tests {
     use crate::models::base::Status;
     use crate::models::simple::SimpleUser;
 
-    async fn create_user<T: UserRepo<SimpleUser>>(email: &str, password: &str, repo: &mut T) -> <SimpleUser as User>::Id {
+    async fn create_user<T: UserRepo<SimpleUser>>(
+        email: &str,
+        password: &str,
+        repo: &mut T,
+    ) -> <SimpleUser as User>::Id {
         let user = SimpleUser::new(email.to_owned(), password.to_owned());
         let id = user.id().clone();
         repo.insert(user).await.unwrap();
@@ -83,7 +99,6 @@ pub mod tests {
             panic!("Wrong error type");
         }
     }
-
 
     pub async fn get_user<T: UserRepo<SimpleUser>>(mut repo: T) {
         repo.start().await.unwrap();
@@ -224,7 +239,9 @@ pub mod tests {
         let now = SystemTime::now();
         let reset_id = repo.password_reset(&email, now).await.unwrap();
         let new_password = String::from("newp@ssword");
-        repo.password_reset_confirm(&reset_id, new_password.clone(), now).await.unwrap();
+        repo.password_reset_confirm(&reset_id, new_password.clone(), now)
+            .await
+            .unwrap();
 
         let user = repo.get_by_key(&email).await.unwrap();
         assert_eq!(user.password, new_password);
@@ -259,7 +276,10 @@ pub mod tests {
         let now = SystemTime::now();
         let email = String::from("user@example.com");
         let password = String::from("p@ssword");
-        let err = repo.password_reset_confirm(&email, password, now).await.unwrap_err();
+        let err = repo
+            .password_reset_confirm(&email, password, now)
+            .await
+            .unwrap_err();
         if let AuthApiError::NotFound { key } = err {
             assert_eq!(key, email);
         } else {
@@ -277,7 +297,10 @@ pub mod tests {
         let reset_id = repo.password_reset(&email, now).await.unwrap();
         let new_password = String::from("newp@ssword");
         let too_late = now + Duration::from_secs(60 * 60);
-        let err = repo.password_reset_confirm(&reset_id, new_password, too_late).await.unwrap_err();
+        let err = repo
+            .password_reset_confirm(&reset_id, new_password, too_late)
+            .await
+            .unwrap_err();
         if let AuthApiError::TokenExpired = err {
         } else {
             println!("{}", err);

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -30,7 +30,10 @@ pub enum TokenType {
 /// then the claims would be "yyyyyy".
 /// The JTI is used as
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Claims<U> where U: User {
+pub struct Claims<U>
+where
+    U: User,
+{
     /// Unique id for the JWT, used for identification within the blacklist
     pub jti: Jti,
     /// Expiration time as a unix timestamp
