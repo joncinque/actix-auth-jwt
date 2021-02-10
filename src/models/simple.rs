@@ -1,12 +1,12 @@
 //! Simple reference implementation for how you might want to create your
 //! own user, including Validators for the DTOs.
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use validator::Validate;
-use validator_derive::Validate;
-
-use crate::models::base::{Status, User};
+use {
+    crate::models::base::{Status, User},
+    serde::{Deserialize, Serialize},
+    uuid::Uuid,
+    validator_derive::Validate,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimpleUser {

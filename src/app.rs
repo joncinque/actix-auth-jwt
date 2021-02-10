@@ -1,12 +1,10 @@
-use actix_web::web::{self, ServiceConfig};
-
-use crate::config::AppConfig;
-use crate::extractors::JwtUserIdConfig;
-use crate::models::base::User;
-use crate::service::auth_service;
-use crate::state::AuthState;
-
-use crate::types::PinFutureObj;
+use {
+    crate::{
+        config::AppConfig, extractors::JwtUserIdConfig, models::base::User, service::auth_service,
+        state::AuthState, types::PinFutureObj,
+    },
+    actix_web::web::{self, ServiceConfig},
+};
 
 pub type DataFactoryFunc<U> = Box<dyn Fn() -> PinFutureObj<std::io::Result<AuthState<U>>>>;
 

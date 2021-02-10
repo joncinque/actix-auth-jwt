@@ -1,11 +1,10 @@
-use std::sync::Arc;
-
-use crate::emails::EmailSender;
-use crate::jwts::authenticator::JwtAuthenticator;
-use crate::models::base::User;
-use crate::passwords::PasswordHasher;
-use crate::repos::base::UserRepo;
-use crate::types::ShareableData;
+use {
+    crate::{
+        emails::EmailSender, jwts::authenticator::JwtAuthenticator, models::base::User,
+        passwords::PasswordHasher, repos::base::UserRepo, types::ShareableData,
+    },
+    std::sync::Arc,
+};
 
 /// Configuration to be created by hand at the top-level, from secret stores
 /// or .env files, and then passed to `config_data_factory`, which handles

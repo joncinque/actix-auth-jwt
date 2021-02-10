@@ -1,10 +1,13 @@
 //! All User info, to be implemented by custom User classes
 
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
-use validator::Validate;
+use {
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
+    std::{
+        fmt::{Debug, Display},
+        hash::Hash,
+    },
+    validator::Validate,
+};
 
 /// Different states that a user could be in,
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

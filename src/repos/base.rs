@@ -1,10 +1,11 @@
 //! General trait for the user repo, which could be contained in memory, in a
 //! database, a flat file, whichever you prefer!
-use async_trait::async_trait;
-use std::time::SystemTime;
 
-use crate::errors::AuthApiError;
-use crate::models::base::User;
+use {
+    crate::{errors::AuthApiError, models::base::User},
+    async_trait::async_trait,
+    std::time::SystemTime,
+};
 
 /// UserRepo contains all of the requirements for managing a user
 #[async_trait]

@@ -1,13 +1,17 @@
-use actix_web::error::ResponseError;
-use actix_web::http::{header, StatusCode};
-use actix_web::HttpResponse;
-use argon2::Error as Argon2Error;
-use failure::Fail;
-use lettre_email::error::Error as LettreError;
-use mongodb::error::{Error as MongoError, ErrorKind};
-use rand::Error as RandError;
-use regex::Regex;
-use validator::{ValidationError, ValidationErrors};
+use {
+    actix_web::{
+        error::ResponseError,
+        http::{header, StatusCode},
+        HttpResponse,
+    },
+    argon2::Error as Argon2Error,
+    failure::Fail,
+    lettre_email::error::Error as LettreError,
+    mongodb::error::{Error as MongoError, ErrorKind},
+    rand::Error as RandError,
+    regex::Regex,
+    validator::{ValidationError, ValidationErrors},
+};
 
 /// Domain-specific errors with any extra information required
 #[derive(Fail, Debug, PartialEq)]

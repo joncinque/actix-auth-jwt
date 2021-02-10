@@ -1,11 +1,14 @@
 //! JWT Blacklist requirements
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-
-use crate::errors::AuthApiError;
-use crate::jwts::types::{Claims, Jti};
-use crate::models::base::User;
+use {
+    crate::{
+        errors::AuthApiError,
+        jwts::types::{Claims, Jti},
+        models::base::User,
+    },
+    async_trait::async_trait,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum JwtStatus {

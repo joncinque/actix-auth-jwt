@@ -1,19 +1,20 @@
 //! Extractor for checking JWT authentication and extracting User info
 
-use actix_http::http::header::Header;
-use actix_http::Payload;
-use actix_web::{Error, FromRequest, HttpRequest};
-use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
-use futures::future::{err, FutureExt};
-use std::future::Future;
-use std::pin::Pin;
-
-use crate::errors::AuthApiError;
-use crate::jwts::authenticator::JwtAuthenticator;
-use crate::jwts::base::JwtStatus;
-use crate::jwts::types::Claims;
-use crate::models::base::User;
-use crate::types::{shareable_data, ShareableData};
+use {
+    crate::{
+        errors::AuthApiError,
+        jwts::authenticator::JwtAuthenticator,
+        jwts::base::JwtStatus,
+        jwts::types::Claims,
+        models::base::User,
+        types::{shareable_data, ShareableData},
+    },
+    actix_http::{http::header::Header, Payload},
+    actix_web::{Error, FromRequest, HttpRequest},
+    actix_web_httpauth::headers::authorization::{Authorization, Bearer},
+    futures::future::{err, FutureExt},
+    std::{future::Future, pin::Pin},
+};
 
 #[derive(Debug)]
 pub struct JwtUserId<U>

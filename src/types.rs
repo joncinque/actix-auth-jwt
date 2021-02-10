@@ -1,7 +1,7 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use {
+    std::{future::Future, pin::Pin, sync::Arc},
+    tokio::sync::RwLock,
+};
 
 /// Async closures are complicated, so this type allows for a Future to exist
 /// in multiple async contexts.

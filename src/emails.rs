@@ -1,8 +1,11 @@
-use lettre_email::EmailBuilder;
-
-use crate::errors::{self, AuthApiError};
-use crate::transports::{EmptyResultTransport, InMemoryTransport};
-use crate::types::{shareable_data, ShareableData};
+use {
+    crate::{
+        errors::{self, AuthApiError},
+        transports::{EmptyResultTransport, InMemoryTransport},
+        types::{shareable_data, ShareableData},
+    },
+    lettre_email::EmailBuilder,
+};
 
 /// Wrapper around lettre transport to generalize transports for the app, and
 /// not needing to parametrize every single function by the transport's Result

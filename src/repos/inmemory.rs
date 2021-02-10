@@ -1,13 +1,18 @@
 //! Sample in-memory implementation of UserRepo
 
-use async_trait::async_trait;
-use std::collections::hash_map::{Entry, HashMap};
-use std::time::{Duration, SystemTime};
-use uuid::Uuid;
-
-use crate::errors::AuthApiError;
-use crate::models::base::{Status, User};
-use crate::repos::base::UserRepo;
+use {
+    crate::{
+        errors::AuthApiError,
+        models::base::{Status, User},
+        repos::base::UserRepo,
+    },
+    async_trait::async_trait,
+    std::{
+        collections::hash_map::{Entry, HashMap},
+        time::{Duration, SystemTime},
+    },
+    uuid::Uuid,
+};
 
 pub struct InMemoryUserRepo<U: User> {
     users_by_id: HashMap<U::Id, U>,

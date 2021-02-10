@@ -1,23 +1,28 @@
 //! Top-level service providing API routes and processor functions
 
-use actix_web::web::{get, post, resource, Data, Json, Path};
-use actix_web::{HttpRequest, HttpResponse, Responder, Scope};
-use actix_web_httpauth::extractors::bearer::BearerAuth;
-use lettre_email::EmailBuilder;
-use std::time::SystemTime;
-use validator::Validate;
-
-use crate::dtos::{
-    ConfirmId, LoginUser, LoginUserResponse, RefreshToken, RefreshTokenResponse, ResetPassword,
-    ResetPasswordConfirm, TokenStatus, TokenStatusResponse, UpdatePassword,
-};
-use crate::extractors::JwtUserId;
-use crate::models::base::User;
-use crate::state::AuthState;
-// import needed to know what's on UserRepo, but gets improperly flagged
-use crate::errors::{self, AuthApiError};
 #[allow(unused_imports)]
 use crate::repos::base::UserRepo;
+use {
+    crate::{
+        dtos::{
+            ConfirmId, LoginUser, LoginUserResponse, RefreshToken, RefreshTokenResponse,
+            ResetPassword, ResetPasswordConfirm, TokenStatus, TokenStatusResponse, UpdatePassword,
+        },
+        // import needed to know what's on UserRepo, but gets improperly flagged
+        errors::{self, AuthApiError},
+        extractors::JwtUserId,
+        models::base::User,
+        state::AuthState,
+    },
+    actix_web::{
+        web::{get, post, resource, Data, Json, Path},
+        HttpRequest, HttpResponse, Responder, Scope,
+    },
+    actix_web_httpauth::extractors::bearer::BearerAuth,
+    lettre_email::EmailBuilder,
+    std::time::SystemTime,
+    validator::Validate,
+};
 
 const SUCCESS_MESSAGE: &str = "Success";
 

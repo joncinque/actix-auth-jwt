@@ -1,16 +1,21 @@
 //! Manager for all JWT related operations, wrapping a blacklist
 
-use jsonwebtoken::{
-    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
+use {
+    crate::{
+        errors::AuthApiError,
+        jwts::{
+            base::{JwtBlacklist, JwtStatus},
+            inmemory::InMemoryJwtBlacklist,
+            types::{generate_jti, unix_timestamp, Claims, Jti, TokenType},
+        },
+        models::base::User,
+        types::{shareable_data, ShareableData},
+    },
+    jsonwebtoken::{
+        decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
+    },
+    std::time::{Duration, SystemTime},
 };
-use std::time::{Duration, SystemTime};
-
-use crate::errors::AuthApiError;
-use crate::jwts::base::{JwtBlacklist, JwtStatus};
-use crate::jwts::inmemory::InMemoryJwtBlacklist;
-use crate::jwts::types::{generate_jti, unix_timestamp, Claims, Jti, TokenType};
-use crate::models::base::User;
-use crate::types::{shareable_data, ShareableData};
 
 /// Bearer token is typed to be a string, since they are sent from the oustide.
 /// The type is provided for better compiler checks.

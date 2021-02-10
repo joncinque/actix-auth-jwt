@@ -1,6 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
+use {
+    serde::{Deserialize, Serialize},
+    std::time::{SystemTime, UNIX_EPOCH},
+    uuid::Uuid,
+};
 
 use crate::models::base::User;
 

@@ -1,10 +1,10 @@
 //! Contains all data-transfer objects to be used by API routes
 
-use serde::{Deserialize, Serialize};
-use validator::Validate;
-use validator_derive::Validate;
-
-use crate::jwts::base::JwtStatus;
+use {
+    crate::jwts::base::JwtStatus,
+    serde::{Deserialize, Serialize},
+    validator_derive::Validate,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct LoginUser {

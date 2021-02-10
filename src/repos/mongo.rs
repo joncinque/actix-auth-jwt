@@ -1,14 +1,19 @@
 //! MongoDB implementation of UserRepo, for actual production use
 
-use async_trait::async_trait;
-use bson::{doc, Bson, Document};
-use mongodb::{Client, Collection, Database};
-use std::marker::PhantomData;
-use std::time::{Duration, SystemTime};
-
-use crate::errors::AuthApiError;
-use crate::models::base::{Status, User};
-use crate::repos::base::UserRepo;
+use {
+    crate::{
+        errors::AuthApiError,
+        models::base::{Status, User},
+        repos::base::UserRepo,
+    },
+    async_trait::async_trait,
+    bson::{doc, Bson, Document},
+    mongodb::{Client, Collection, Database},
+    std::{
+        marker::PhantomData,
+        time::{Duration, SystemTime},
+    },
+};
 
 pub struct MongoRepo<U: User> {
     client: Option<Client>,

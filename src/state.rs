@@ -1,15 +1,17 @@
 //! All state needs for Auth routes
 
-use std::sync::Arc;
-
-use crate::emails::EmailSender;
-use crate::extractors::JwtUserIdConfig;
-use crate::jwts::authenticator::JwtAuthenticator;
-use crate::models::base::User;
-use crate::passwords::PasswordHasher;
-use crate::repos::base::UserRepo;
-use crate::repos::inmemory::InMemoryUserRepo;
-use crate::types::{shareable_data, ShareableData};
+use {
+    crate::{
+        emails::EmailSender,
+        extractors::JwtUserIdConfig,
+        jwts::authenticator::JwtAuthenticator,
+        models::base::User,
+        passwords::PasswordHasher,
+        repos::{base::UserRepo, inmemory::InMemoryUserRepo},
+        types::{shareable_data, ShareableData},
+    },
+    std::sync::Arc,
+};
 
 pub struct AuthState<U>
 where

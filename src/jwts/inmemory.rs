@@ -1,11 +1,15 @@
-use async_trait::async_trait;
-use futures::future::{ready, FutureExt, LocalBoxFuture};
-use std::collections::hash_map::{Entry, HashMap};
-
-use crate::errors::AuthApiError;
-use crate::jwts::base::{JwtBlacklist, JwtStatus};
-use crate::jwts::types::{Claims, Jti};
-use crate::models::base::User;
+use {
+    crate::{
+        errors::AuthApiError,
+        jwts::{
+            base::{JwtBlacklist, JwtStatus},
+            types::{Claims, Jti},
+        },
+        models::base::User,
+    },
+    async_trait::async_trait,
+    std::collections::hash_map::{Entry, HashMap},
+};
 
 pub struct InMemoryJwtBlacklist<U>
 where

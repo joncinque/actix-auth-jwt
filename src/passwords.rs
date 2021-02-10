@@ -1,9 +1,11 @@
-use argon2::{self, Config};
-use rand::prelude::*;
-use rand::rngs::ThreadRng;
-
-use crate::errors::{self, AuthApiError};
-use crate::types::PinFutureObj;
+use {
+    crate::{
+        errors::{self, AuthApiError},
+        types::PinFutureObj,
+    },
+    argon2::{self, Config},
+    rand::{prelude::*, rngs::ThreadRng},
+};
 
 /// Helper type for defining a password hashing function in async
 pub type Hasher = Box<dyn Fn(String) -> PinFutureObj<Result<String, AuthApiError>>>;
