@@ -1,15 +1,15 @@
-use actix_web::middleware::{Logger, NormalizePath};
-use actix_web::{App, HttpServer};
-use std::sync::Arc;
-
-use actix_auth_jwt::app;
-use actix_auth_jwt::config::AppConfig;
-use actix_auth_jwt::emails::EmailSender;
-use actix_auth_jwt::jwts::authenticator::JwtAuthenticator;
-use actix_auth_jwt::models::simple::SimpleUser;
-use actix_auth_jwt::passwords::PasswordHasher;
-use actix_auth_jwt::repos::inmemory::InMemoryUserRepo;
-use actix_auth_jwt::types::shareable_data;
+use {
+    actix_auth_jwt::{
+        app, config::AppConfig, emails::EmailSender, jwts::authenticator::JwtAuthenticator,
+        models::simple::SimpleUser, passwords::PasswordHasher, repos::inmemory::InMemoryUserRepo,
+        types::shareable_data,
+    },
+    actix_web::{
+        middleware::{Logger, NormalizePath},
+        App, HttpServer,
+    },
+    std::sync::Arc,
+};
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -30,7 +30,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .data_factory(app::config_data_factory::<SimpleUser>(config.clone()))
             .wrap(Logger::default())
-            .wrap(NormalizePath)
+            .wrap(NormalizePath::default())
             .configure(app::config_app::<SimpleUser>())
     })
     .bind("127.0.0.1:7878")?
