@@ -71,7 +71,7 @@ where
         let exp = unix_timestamp(time + self.bearer_token_lifetime);
         let token_type = TokenType::Bearer;
         let iss = self.iss.clone();
-        let sub = id.clone();
+        let sub = id;
         Claims::<U> {
             jti,
             exp,
@@ -83,8 +83,7 @@ where
     }
 
     pub fn decode(&self, token: &str) -> Result<TokenData<Claims<U>>, AuthApiError> {
-        decode::<Claims<U>>(token, &self.decoding_key, &self.validation)
-            .map_err(|e| AuthApiError::from(e))
+        decode::<Claims<U>>(token, &self.decoding_key, &self.validation).map_err(AuthApiError::from)
     }
 
     pub async fn create_token_pair(
@@ -95,10 +94,10 @@ where
         let jti = generate_jti();
         let refresh_claims = self.new_refresh_claims(jti.clone(), id.clone(), time);
         let refresh = encode(&self.header, &refresh_claims, &self.encoding_key)
-            .map_err(|e| AuthApiError::from(e))?;
+            .map_err(AuthApiError::from)?;
         let bearer_claims = self.new_bearer_claims(jti.clone(), id.clone(), time);
-        let bearer = encode(&self.header, &bearer_claims, &self.encoding_key)
-            .map_err(|e| AuthApiError::from(e))?;
+        let bearer =
+            encode(&self.header, &bearer_claims, &self.encoding_key).map_err(AuthApiError::from)?;
         self.blacklist
             .write()
             .await

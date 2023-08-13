@@ -41,7 +41,7 @@ impl<U: User> MongoRepo<U> {
     }
 
     fn get_user_document(&self, user: &U) -> Result<Document, AuthApiError> {
-        let serialized = bson::to_bson(user).map_err(|e| AuthApiError::from(e))?;
+        let serialized = bson::to_bson(user).map_err(AuthApiError::from)?;
 
         match serialized {
             Bson::Document(v) => Ok(v),
@@ -70,7 +70,7 @@ impl<U: User> MongoRepo<U> {
             .unwrap()
             .drop(None)
             .await
-            .map_err(|e| AuthApiError::from(e))
+            .map_err(AuthApiError::from)
     }
 }
 
@@ -88,7 +88,7 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn start(&mut self) -> Result<(), AuthApiError> {
         let client = Client::with_uri_str(&self.uri)
             .await
-            .map_err(|e| AuthApiError::from(e))?;
+            .map_err(AuthApiError::from)?;
         let db = client.database(&self.db_name);
         let indexes = doc! {
             "createIndexes": self.coll_name.clone(),
@@ -137,7 +137,7 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         coll.insert_one(user, None)
             .await
             .map(|_r| ())
-            .map_err(|e| AuthApiError::from(e))
+            .map_err(AuthApiError::from)
     }
 
     async fn confirm(&mut self, id: &U::Id) -> Result<(), AuthApiError> {
@@ -152,7 +152,7 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         let result = coll
             .update_one(query, update, None)
             .await
-            .map_err(|e| AuthApiError::from(e))?;
+            .map_err(AuthApiError::from)?;
         match result.modified_count {
             1 => Ok(()),
             0 => Err(AuthApiError::NotFound {
@@ -170,7 +170,7 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         let result = coll
             .delete_one(doc, None)
             .await
-            .map_err(|e| AuthApiError::from(e))?;
+            .map_err(AuthApiError::from)?;
         match result.deleted_count {
             1 => Ok(()),
             0 => Err(AuthApiError::NotFound {
@@ -189,7 +189,7 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
         let result = coll
             .update_one(query, update, None)
             .await
-            .map_err(|e| AuthApiError::from(e))?;
+            .map_err(AuthApiError::from)?;
         match result.modified_count {
             1 => Ok(()),
             0 => Err(AuthApiError::NotFound {
@@ -201,17 +201,17 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
 
     async fn password_reset(
         &mut self,
-        key: &U::Key,
-        time: SystemTime,
+        _key: &U::Key,
+        _time: SystemTime,
     ) -> Result<String, AuthApiError> {
         Err(AuthApiError::InternalError)
     }
 
     async fn password_reset_confirm(
         &mut self,
-        reset_id: &str,
-        password: String,
-        time: SystemTime,
+        _reset_id: &str,
+        _password: String,
+        _time: SystemTime,
     ) -> Result<(), AuthApiError> {
         Err(AuthApiError::InternalError)
     }

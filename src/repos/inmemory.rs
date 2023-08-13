@@ -96,7 +96,8 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
             Entry::Occupied(mut e) => {
                 let user = e.get_mut();
                 if *user.status() == Status::Unconfirmed {
-                    Ok(user.set_status(Status::Confirmed))
+                    user.set_status(Status::Confirmed);
+                    Ok(())
                 } else {
                     Err(AuthApiError::AlreadyUsed)
                 }
@@ -109,7 +110,7 @@ impl<U: User> UserRepo<U> for InMemoryUserRepo<U> {
     }
 
     async fn remove(&mut self, id: &U::Id) -> Result<(), AuthApiError> {
-        match self.users_by_id.remove(&id) {
+        match self.users_by_id.remove(id) {
             Some(v) => {
                 self.users_by_key.remove(v.key());
                 Ok(())

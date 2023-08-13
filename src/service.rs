@@ -55,7 +55,7 @@ where
     let id = format!("{}", user.id());
     let mut user_repo = data.user_repo.write().await;
     user_repo.insert(user).await?;
-    let url = req.url_for("register-confirm", &[id]).unwrap();
+    let url = req.url_for("register-confirm", [id]).unwrap();
     builder = builder.body(format!(
         "Please go to {} to confirm your registration.",
         url
@@ -182,7 +182,7 @@ where
 
     let mut builder = EmailBuilder::new().to(email).subject("Reset password");
 
-    let url = req.url_for("password-reset-confirm", &[reset_id]).unwrap();
+    let url = req.url_for("password-reset-confirm", [reset_id]).unwrap();
     builder = builder.body(format!("Please go to {} to reset your password.", url));
 
     let mut sender = data.sender.write().await;
@@ -305,7 +305,7 @@ mod tests {
 
     fn get_confirmation_url(message: &str) -> &str {
         let re = Regex::new(r"http://\S+").unwrap();
-        let m = re.find(&message).unwrap();
+        let m = re.find(message).unwrap();
         m.as_str()
     }
 
@@ -419,8 +419,7 @@ mod tests {
             .uri(url)
             .set_json(&dto)
             .to_request();
-        let resp = test::call_service(&mut app, req).await;
-        resp
+        test::call_service(&mut app, req).await
     }
 
     async fn login_user(

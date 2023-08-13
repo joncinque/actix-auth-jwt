@@ -40,7 +40,7 @@ pub enum AuthApiError {
     ConfigurationError { key: String },
 }
 
-fn into_str(error: &Vec<ValidationError>) -> String {
+fn into_str(error: &[ValidationError]) -> String {
     error
         .iter()
         .map(|e| format!("{}", e))
@@ -96,21 +96,18 @@ const DUPLICATE_WRITE_ERROR: i32 = 11000;
 impl From<MongoError> for AuthApiError {
     fn from(error: MongoError) -> AuthApiError {
         match error.kind.as_ref() {
-            ErrorKind::Write(f) => match f {
-                mongodb::error::WriteFailure::WriteError(we) => match we.code {
-                    DUPLICATE_WRITE_ERROR => {
-                        let re = Regex::new("dup key.*\"(.*)\"").unwrap();
-                        println!("{}", &we.message);
-                        match re.captures(&we.message) {
-                            None => AuthApiError::InternalError,
-                            Some(caps) => {
-                                let key = caps.get(1).map_or("", |m| m.as_str()).to_owned();
-                                AuthApiError::AlreadyExists { key }
-                            }
+            ErrorKind::Write(mongodb::error::WriteFailure::WriteError(we)) => match we.code {
+                DUPLICATE_WRITE_ERROR => {
+                    let re = Regex::new("dup key.*\"(.*)\"").unwrap();
+                    println!("{}", &we.message);
+                    match re.captures(&we.message) {
+                        None => AuthApiError::InternalError,
+                        Some(caps) => {
+                            let key = caps.get(1).map_or("", |m| m.as_str()).to_owned();
+                            AuthApiError::AlreadyExists { key }
                         }
                     }
-                    _ => AuthApiError::InternalError,
-                },
+                }
                 _ => AuthApiError::InternalError,
             },
             _ => AuthApiError::InternalError,

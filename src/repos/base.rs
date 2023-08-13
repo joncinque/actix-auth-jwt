@@ -168,7 +168,7 @@ pub mod tests {
         let password2 = String::from("p@ssword2");
         user.password = password2.clone();
         repo.update(user).await.unwrap();
-        let user = repo.get_by_key(&email).await.unwrap().clone();
+        let user = repo.get_by_key(&email).await.unwrap();
         assert_eq!(password2, user.password);
         assert_eq!(id, user.id);
         assert_eq!(email, user.email);

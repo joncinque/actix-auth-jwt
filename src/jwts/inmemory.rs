@@ -373,8 +373,7 @@ mod tests {
             .unwrap();
         let claims = authenticator.decode(&pair.refresh).unwrap().claims;
         let jti = claims.jti;
-        let result = authenticator.blacklist(pair.bearer).await.unwrap();
-        assert_eq!(result, ());
+        authenticator.blacklist(pair.bearer).await.unwrap();
         let status = authenticator.status(&jti).await;
         assert_eq!(status, JwtStatus::Blacklisted);
     }
@@ -391,8 +390,7 @@ mod tests {
             .unwrap();
         let claims = authenticator.decode(&pair.bearer).unwrap().claims;
         let jti = claims.jti;
-        let result = authenticator.blacklist(pair.refresh).await.unwrap();
-        assert_eq!(result, ());
+        authenticator.blacklist(pair.refresh).await.unwrap();
         let status = authenticator.status(&jti).await;
         assert_eq!(status, JwtStatus::Blacklisted);
     }
