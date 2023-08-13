@@ -57,7 +57,7 @@ pub fn argon2_password_hasher(secret_key: String) -> Hasher {
     Box::new(move |password| {
         let secret_key = secret_key.clone();
         Box::pin(async move {
-            let mut config = Config::default();
+            let mut config = Config::original();
             let mut rng = rand::thread_rng();
             config.secret = secret_key.as_bytes();
             let salt = random_salt(32, &mut rng)?;

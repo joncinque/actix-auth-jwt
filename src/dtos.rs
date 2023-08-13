@@ -3,7 +3,7 @@
 use {
     crate::jwts::base::JwtStatus,
     serde::{Deserialize, Serialize},
-    validator_derive::Validate,
+    validator::Validate,
 };
 
 #[derive(Serialize, Deserialize)]

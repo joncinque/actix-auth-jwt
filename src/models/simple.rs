@@ -5,7 +5,7 @@ use {
     crate::models::base::{Status, User},
     serde::{Deserialize, Serialize},
     uuid::Uuid,
-    validator_derive::Validate,
+    validator::Validate,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
