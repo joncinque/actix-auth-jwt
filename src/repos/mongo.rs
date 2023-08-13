@@ -10,24 +10,21 @@ use {
     bson::{doc, Bson, Document},
     mongodb::{Client, Collection, Database},
     std::{
-        marker::PhantomData,
-        time::{Duration, SystemTime},
+        time::SystemTime,
     },
 };
 
 pub struct MongoRepo<U: User> {
     client: Option<Client>,
     db: Option<Database>,
-    coll: Option<Collection>,
+    coll: Option<Collection<U>>,
     uri: String,
     db_name: String,
     coll_name: String,
-    phantom: PhantomData<U>,
 }
 
 impl<U: User> MongoRepo<U> {
     pub fn new(uri: String, db_name: String, coll_name: String) -> MongoRepo<U> {
-        let phantom = PhantomData;
         let client = None;
         let db = None;
         let coll = None;
@@ -38,11 +35,10 @@ impl<U: User> MongoRepo<U> {
             uri,
             db_name,
             coll_name,
-            phantom,
         }
     }
 
-    fn get_user_collection(&self) -> Result<&Collection, AuthApiError> {
+    fn get_user_collection(&self) -> Result<&Collection<U>, AuthApiError> {
         self.coll.as_ref().ok_or(AuthApiError::InternalError)
     }
 
@@ -121,29 +117,26 @@ impl<U: User> UserRepo<U> for MongoRepo<U> {
     async fn get_by_key(&self, key: &U::Key) -> Result<U, AuthApiError> {
         let coll = self.get_user_collection()?;
         let key = format!("{}", key);
-        let user_doc: Document = coll
+        let user = coll
             .find_one(doc! { U::key_field(): key.clone() }, None)
             .await?
             .ok_or(AuthApiError::NotFound { key })?;
-        let user = bson::from_bson(user_doc.into()).map_err(|e| AuthApiError::from(e))?;
         self.check_user_status(user)
     }
 
     async fn get_by_id(&self, id: &U::Id) -> Result<U, AuthApiError> {
         let coll = self.get_user_collection()?;
         let key = format!("{}", id);
-        let user_doc: Document = coll
+        let user = coll
             .find_one(doc! { U::id_field(): key.clone() }, None)
             .await?
             .ok_or(AuthApiError::NotFound { key })?;
-        let user = bson::from_bson(user_doc.into()).map_err(|e| AuthApiError::from(e))?;
         self.check_user_status(user)
     }
 
     async fn insert(&mut self, user: U) -> Result<(), AuthApiError> {
         let coll = self.get_user_collection()?;
-        let doc = self.get_user_document(&user)?;
-        coll.insert_one(doc, None)
+        coll.insert_one(user, None)
             .await
             .map(|_r| ())
             .map_err(|e| AuthApiError::from(e))

@@ -96,7 +96,7 @@ const DUPLICATE_WRITE_ERROR: i32 = 11000;
 impl From<MongoError> for AuthApiError {
     fn from(error: MongoError) -> AuthApiError {
         match error.kind.as_ref() {
-            ErrorKind::WriteError(f) => match f {
+            ErrorKind::Write(f) => match f {
                 mongodb::error::WriteFailure::WriteError(we) => match we.code {
                     DUPLICATE_WRITE_ERROR => {
                         let re = Regex::new("dup key.*\"(.*)\"").unwrap();

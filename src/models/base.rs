@@ -5,6 +5,7 @@ use {
     std::{
         fmt::{Debug, Display},
         hash::Hash,
+        marker::Unpin,
     },
     validator::Validate,
 };
@@ -24,7 +25,7 @@ pub enum Status {
 /// on this User, so the system makes good use of the type-checker.
 pub trait User
 where
-    Self: Clone + Serialize + DeserializeOwned + Send + Sync,
+    Self: Clone + Serialize + DeserializeOwned + Send + Sync + Unpin,
 {
     /// User-provided key.  This could be a username or email address, and must
     /// be unique for the UserRepo to work.
