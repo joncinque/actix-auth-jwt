@@ -557,7 +557,7 @@ mod tests {
         {
             let user_repo = user_repo.read().await;
             let err = user_repo.get_by_key(&email).await.unwrap_err();
-            assert!(matches!(err, AuthApiError::Unconfirmed { .. } ));
+            assert!(matches!(err, AuthApiError::Unconfirmed { .. }));
         }
     }
 

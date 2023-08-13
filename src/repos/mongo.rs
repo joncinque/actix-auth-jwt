@@ -9,9 +9,7 @@ use {
     async_trait::async_trait,
     bson::{doc, Bson, Document},
     mongodb::{Client, Collection, Database},
-    std::{
-        time::SystemTime,
-    },
+    std::time::SystemTime,
 };
 
 pub struct MongoRepo<U: User> {
