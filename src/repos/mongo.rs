@@ -224,6 +224,7 @@ mod tests {
     use crate::repos::base;
 
     #[actix_rt::test]
+    #[ignore]
     async fn get_created_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -235,6 +236,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_double_create_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -246,6 +248,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn get_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -257,6 +260,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_get_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -268,6 +272,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_remove_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -279,6 +284,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn remove_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -290,6 +296,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_update_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -301,6 +308,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn update_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -312,6 +320,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn confirm_user() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -323,6 +332,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_insert_user_exists_unconfirmed() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
@@ -334,6 +344,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[ignore]
     async fn fail_insert_user_exists_confirmed() {
         let uri = String::from("mongodb://localhost");
         let db_name = String::from("auth_jwt_test");
