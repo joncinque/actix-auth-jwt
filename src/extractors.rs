@@ -9,7 +9,7 @@ use {
         models::base::User,
         types::{shareable_data, ShareableData},
     },
-    actix_http::{http::header::Header, Payload},
+    actix_http::{header::Header, Payload},
     actix_web::{Error, FromRequest, HttpRequest},
     actix_web_httpauth::headers::authorization::{Authorization, Bearer},
     futures::future::{err, FutureExt},
@@ -40,13 +40,12 @@ impl<U> FromRequest for JwtUserId<U>
 where
     U: User + 'static,
 {
-    type Config = JwtUserIdConfig<U>;
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Error>>>>;
 
     #[inline]
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let config = req.app_data::<Self::Config>();
+        let config = req.app_data::<JwtUserIdConfig<U>>();
         match config {
             Some(config) => {
                 let authenticator = config.authenticator.clone();
@@ -109,7 +108,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_no_app_data() {
         let (req, mut pl) = TestRequest::default()
-            .header(AUTHORIZATION, "Bearer blah.blah.blah")
+            .insert_header((AUTHORIZATION, "Bearer blah.blah.blah"))
             .to_http_parts();
 
         let err = JwtUserId::<SimpleUser>::from_request(&req, &mut pl)
@@ -137,7 +136,7 @@ mod tests {
             .await
             .unwrap();
         let (req, mut pl) = TestRequest::default()
-            .header(AUTHORIZATION, format!("Bearer {}", token_pair.bearer))
+            .insert_header((AUTHORIZATION, format!("Bearer {}", token_pair.bearer)))
             .app_data(JwtUserIdConfig {
                 authenticator: authenticator.clone(),
             })
@@ -154,7 +153,7 @@ mod tests {
         let authenticator: JwtAuthenticator<SimpleUser> = Default::default();
         let authenticator = shareable_data(authenticator);
         let (req, mut pl) = TestRequest::default()
-            .header(AUTHORIZATION, "Bearer blah.blah.blah")
+            .insert_header((AUTHORIZATION, "Bearer blah.blah.blah"))
             .app_data(JwtUserIdConfig {
                 authenticator: authenticator.clone(),
             })
@@ -191,7 +190,7 @@ mod tests {
             .unwrap();
 
         let (req, mut pl) = TestRequest::default()
-            .header(AUTHORIZATION, format!("Bearer {}", token_pair.bearer))
+            .insert_header((AUTHORIZATION, format!("Bearer {}", token_pair.bearer)))
             .app_data(JwtUserIdConfig {
                 authenticator: authenticator.clone(),
             })
@@ -207,7 +206,7 @@ mod tests {
         assert_eq!(error, "Error with JWT");
 
         let (req, mut pl) = TestRequest::default()
-            .header(AUTHORIZATION, format!("Bearer {}", new_pair.bearer))
+            .insert_header((AUTHORIZATION, format!("Bearer {}", new_pair.bearer)))
             .app_data(JwtUserIdConfig {
                 authenticator: authenticator.clone(),
             })

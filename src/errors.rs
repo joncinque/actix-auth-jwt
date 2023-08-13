@@ -131,7 +131,7 @@ impl From<bson::de::Error> for AuthApiError {
 impl ResponseError for AuthApiError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code())
-            .set_header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
             .body(self.to_string())
     }
 

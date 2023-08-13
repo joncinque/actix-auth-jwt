@@ -261,7 +261,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use actix_web::dev::{Body, MessageBody, ServiceResponse};
+    use actix_web::body::MessageBody;
+    use actix_web::dev::ServiceResponse;
     use actix_web::http::{header, StatusCode};
     use actix_web::{test, App};
     use regex::Regex;
@@ -286,11 +287,9 @@ mod tests {
         }
     }
 
-    fn get_body(response: &ServiceResponse) -> &str {
-        match response.response().body().as_ref() {
-            Some(Body::Bytes(bytes)) => std::str::from_utf8(bytes).unwrap(),
-            _ => panic!("Response error"),
-        }
+    fn get_body(response: ServiceResponse) -> String {
+        let bytes = response.into_body().try_into_bytes().unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
     }
 
     async fn read_body_json<B, T>(res: ServiceResponse<B>) -> T
@@ -315,9 +314,9 @@ mod tests {
         password2: &str,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/register", post().to(register::<SimpleUser>))
                 .service(
                     resource("/register/confirm/{id}")
@@ -331,7 +330,7 @@ mod tests {
             .uri("/register")
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn confirm_user(
@@ -339,8 +338,8 @@ mod tests {
         transport: ShareableData<InMemoryTransport>,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
-            App::new().data(state.clone()).service(
+        let app = test::init_service(
+            App::new().app_data(Data::new(state.clone())).service(
                 resource("/register/confirm/{id}")
                     .name("register-confirm")
                     .route(post().to(register_confirm::<SimpleUser>)),
@@ -362,15 +361,15 @@ mod tests {
 
         let url = get_confirmation_url(&message);
         let req = test::TestRequest::post().uri(url).to_request();
-        let resp = test::call_service(&mut app, req).await;
+        let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         resp
     }
 
     async fn reset_password_initiate(email: &str, state: AuthState<SimpleUser>) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/password/reset", post().to(password_reset::<SimpleUser>))
                 .service(
                     resource("/password/reset/{id}")
@@ -385,7 +384,7 @@ mod tests {
             .uri("/password/reset")
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn reset_password_confirm(
@@ -394,8 +393,8 @@ mod tests {
         transport: ShareableData<InMemoryTransport>,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
-            App::new().data(state.clone()).service(
+        let app = test::init_service(
+            App::new().app_data(Data::new(state.clone())).service(
                 resource("/password/reset/{id}")
                     .name("password-reset-confirm")
                     .route(post().to(password_reset_confirm::<SimpleUser>)),
@@ -419,7 +418,7 @@ mod tests {
             .uri(url)
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn login_user(
@@ -427,9 +426,9 @@ mod tests {
         password: &str,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/login", post().to(login::<SimpleUser>)),
         )
         .await;
@@ -441,7 +440,7 @@ mod tests {
             .uri("/login")
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn update_user(
@@ -449,10 +448,10 @@ mod tests {
         email: &str,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
                 .app_data(state.extractor.clone())
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/update", post().to(update::<SimpleUser>)),
         )
         .await;
@@ -460,10 +459,10 @@ mod tests {
         let dto = UpdateDto { email };
         let req = test::TestRequest::post()
             .uri("/update")
-            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", bearer)))
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn update_password(
@@ -473,10 +472,10 @@ mod tests {
         new_password2: &str,
         state: AuthState<SimpleUser>,
     ) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
                 .app_data(state.extractor.clone())
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/password/update", post().to(password_update::<SimpleUser>)),
         )
         .await;
@@ -487,30 +486,30 @@ mod tests {
         };
         let req = test::TestRequest::post()
             .uri("/password/update")
-            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", bearer)))
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn logout_user(bearer: &str, state: AuthState<SimpleUser>) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/logout", post().to(logout::<SimpleUser>)),
         )
         .await;
         let req = test::TestRequest::post()
             .uri("/logout")
-            .header(header::AUTHORIZATION, format!("Bearer {}", bearer))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", bearer)))
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn refresh_token(refresh: String, state: AuthState<SimpleUser>) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/token/refresh", post().to(token_refresh::<SimpleUser>)),
         )
         .await;
@@ -519,13 +518,13 @@ mod tests {
             .uri("/token/refresh")
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     async fn status_token(token: String, state: AuthState<SimpleUser>) -> ServiceResponse {
-        let mut app = test::init_service(
+        let app = test::init_service(
             App::new()
-                .data(state)
+                .app_data(Data::new(state))
                 .route("/token/status", get().to(token_status::<SimpleUser>)),
         )
         .await;
@@ -534,14 +533,14 @@ mod tests {
             .uri("/token/status")
             .set_json(&dto)
             .to_request();
-        test::call_service(&mut app, req).await
+        test::call_service(&app, req).await
     }
 
     #[actix_rt::test]
     async fn get_index() {
-        let mut app = test::init_service(App::new().route("/", get().to(index))).await;
+        let app = test::init_service(App::new().route("/", get().to(index))).await;
         let req = test::TestRequest::get().uri("/").to_request();
-        let resp = test::call_service(&mut app, req).await;
+        let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
@@ -567,9 +566,9 @@ mod tests {
         let password1 = String::from("p@ssword1");
         let password2 = String::from("p@ssword2");
         let resp = register_user(&email, &password1, &password2, state).await;
-        let body = get_body(&resp);
-        assert!(body.contains("password1"));
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = get_body(resp);
+        assert!(body.contains("password1"));
     }
 
     #[actix_rt::test]
@@ -578,9 +577,9 @@ mod tests {
         let email = String::from("test@example.com");
         let password = String::from("p@ss");
         let resp = register_user(&email, &password, &password, state).await;
-        let body = get_body(&resp);
-        assert!(body.contains("password1"));
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = get_body(resp);
+        assert!(body.contains("password1"));
     }
 
     #[actix_rt::test]
@@ -589,9 +588,9 @@ mod tests {
         let email = String::from("test");
         let password = String::from("p@ssword");
         let resp = register_user(&email, &password, &password, state).await;
-        let body = get_body(&resp);
-        assert!(body.contains("email"));
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = get_body(resp);
+        assert!(body.contains("email"));
     }
 
     #[actix_rt::test]
@@ -602,9 +601,9 @@ mod tests {
         let resp = register_user(&email, &password, &password, state.clone()).await;
         assert_eq!(resp.status(), StatusCode::CREATED);
         let resp = register_user(&email, &password, &password, state).await;
-        let body = get_body(&resp);
-        assert!(body.contains("User already exists: test@example.com"));
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = get_body(resp);
+        assert!(body.contains("User already exists: test@example.com"));
     }
 
     #[actix_rt::test]

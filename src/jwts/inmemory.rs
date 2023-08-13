@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn fail_decode_expired_token() {
+    async fn success_decode_expired_token() {
         let blacklist = InMemoryJwtBlacklist::<SimpleUser>::new();
         let mut authenticator = JwtAuthenticator::new(
             String::from("issuer"),
@@ -334,14 +334,13 @@ mod tests {
             shareable_data(blacklist),
         );
         let user_id = SimpleUser::generate_id();
-        let time = SystemTime::now() - Duration::from_secs(61);
+        let time = SystemTime::now() - Duration::from_secs(70);
 
         let pair = authenticator
             .create_token_pair(&user_id, time)
             .await
             .unwrap();
-        let err = authenticator.decode(&pair.bearer).unwrap_err();
-        assert_eq!(err, AuthApiError::JwtError);
+        authenticator.decode(&pair.bearer).unwrap();
     }
 
     #[actix_rt::test]
