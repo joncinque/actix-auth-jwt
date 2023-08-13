@@ -42,7 +42,7 @@ pub struct JwtAuthenticator<U: User> {
     bearer_token_lifetime: Duration,
     refresh_token_lifetime: Duration,
     encoding_key: EncodingKey,
-    decoding_key: DecodingKey<'static>,
+    decoding_key: DecodingKey,
     blacklist: ShareableData<dyn JwtBlacklist<U>>,
 }
 
@@ -152,7 +152,7 @@ where
         let header = Header::new(alg);
         let validation = Validation::new(alg);
         let encoding_key = EncodingKey::from_secret(secret.as_bytes());
-        let decoding_key = DecodingKey::from_secret(secret.as_bytes()).into_static();
+        let decoding_key = DecodingKey::from_secret(secret.as_bytes());
         JwtAuthenticator {
             iss,
             header,
