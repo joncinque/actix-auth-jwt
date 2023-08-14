@@ -4,7 +4,7 @@ use {
         transports::{EmptyResultTransport, InMemoryTransport},
         types::{shareable_data, ShareableData},
     },
-    lettre_email::EmailBuilder,
+    lettre::message::MessageBuilder,
 };
 
 /// Wrapper around lettre transport to generalize transports for the app, and
@@ -21,16 +21,25 @@ impl EmailSender {
     }
 
     /// Main send function.  Note that this isn't actually async at the moment!
-    pub async fn send(&mut self, builder: EmailBuilder) -> Result<(), AuthApiError> {
+    pub async fn send(
+        &mut self,
+        builder: MessageBuilder,
+        body: String,
+    ) -> Result<(), AuthApiError> {
         let email = builder
-            .from(self.from.as_str())
-            .build()
+            .from(
+                self.from
+                    .as_str()
+                    .parse()
+                    .map_err(errors::from_lettre_address)?,
+            )
+            .body(body)
             .map_err(errors::from_lettre)?;
 
         self.transport
             .write()
             .await
-            .send(email.into())
+            .send(&email)
             .map_err(errors::from_empty)
     }
 }
@@ -54,11 +63,11 @@ mod tests {
         let base_transport: ShareableData<EmptyResultTransport> = transport.clone();
         let mut sender = EmailSender::new(String::from("admin@example.com"), base_transport);
         let to = "test@example.com";
-        let body = "Message body!";
-        let email = EmailBuilder::new().to(to).body(body);
-        sender.send(email).await.unwrap();
+        let body = "Message body!".to_string();
+        let email = MessageBuilder::new().to(to.parse().unwrap());
+        sender.send(email, body).await.unwrap();
 
         let transport = transport.read().await;
-        assert_eq!(transport.emails.len(), 1);
+        assert_eq!(transport.emails.borrow().len(), 1);
     }
 }

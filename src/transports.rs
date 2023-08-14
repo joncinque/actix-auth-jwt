@@ -1,6 +1,9 @@
-use lettre::{SendableEmail, Transport};
+use {
+    lettre::{address::Envelope, Transport},
+    std::cell::RefCell,
+};
 
-pub type ResultTransport<T, E> = dyn Transport<'static, Result = Result<T, E>>;
+pub type ResultTransport<T, E> = dyn Transport<Ok = T, Error = E>;
 pub type EmptyResult = Result<(), ()>;
 
 /// Convenience type because the lettre Transport trait does not expose bounds
@@ -11,14 +14,14 @@ pub type EmptyResultTransport = ResultTransport<(), ()>;
 /// all emails internally, allowing tests to investigate them later.
 pub struct InMemoryTransport {
     /// All messages submitted to the transport
-    pub emails: Vec<SendableEmail>,
+    pub emails: RefCell<Vec<(Envelope, Vec<u8>)>>,
     /// Response to always be returned from send, allows testing error situations
     response: EmptyResult,
 }
 
 impl InMemoryTransport {
     pub fn new(response: EmptyResult) -> Self {
-        let emails = Vec::new();
+        let emails = RefCell::new(vec![]);
         InMemoryTransport { emails, response }
     }
 }
@@ -29,11 +32,14 @@ impl Default for InMemoryTransport {
     }
 }
 
-impl<'a> Transport<'a> for InMemoryTransport {
-    type Result = EmptyResult;
+impl Transport for InMemoryTransport {
+    type Ok = ();
+    type Error = ();
 
-    fn send(&mut self, email: SendableEmail) -> Self::Result {
-        self.emails.push(email);
+    fn send_raw(&self, envelope: &Envelope, email: &[u8]) -> Result<Self::Ok, Self::Error> {
+        self.emails
+            .borrow_mut()
+            .push((envelope.clone(), email.to_vec()));
         self.response
     }
 }

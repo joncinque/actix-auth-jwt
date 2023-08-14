@@ -6,7 +6,7 @@ use {
     },
     argon2::Error as Argon2Error,
     failure::Fail,
-    lettre_email::error::Error as LettreError,
+    lettre::{address::AddressError as LettreAddressError, error::Error as LettreError},
     mongodb::error::{Error as MongoError, ErrorKind},
     rand::Error as RandError,
     regex::Regex,
@@ -82,6 +82,11 @@ pub fn from_empty(_error: ()) -> AuthApiError {
 
 /// TODO change this to a From impl
 pub fn from_lettre(_error: LettreError) -> AuthApiError {
+    AuthApiError::InternalError
+}
+
+/// TODO change this to a From impl
+pub fn from_lettre_address(_error: LettreAddressError) -> AuthApiError {
     AuthApiError::InternalError
 }
 

@@ -19,7 +19,7 @@ use {
         HttpRequest, HttpResponse, Responder, Scope,
     },
     actix_web_httpauth::extractors::bearer::BearerAuth,
-    lettre_email::EmailBuilder,
+    lettre::message::Message,
     std::time::SystemTime,
     validator::Validate,
 };
@@ -45,8 +45,8 @@ where
 
     let mut user = U::from(registration);
 
-    let mut builder = EmailBuilder::new()
-        .to(user.email())
+    let builder = Message::builder()
+        .to(user.email().parse().map_err(errors::from_lettre_address)?)
         .subject("Confirm email address");
 
     let hash = (data.hasher.hasher)(String::from(user.password())).await?;
@@ -56,13 +56,10 @@ where
     let mut user_repo = data.user_repo.write().await;
     user_repo.insert(user).await?;
     let url = req.url_for("register-confirm", [id]).unwrap();
-    builder = builder.body(format!(
-        "Please go to {} to confirm your registration.",
-        url
-    ));
+    let body = format!("Please go to {url} to confirm your registration.");
 
     let mut sender = data.sender.write().await;
-    sender.send(builder).await?;
+    sender.send(builder, body).await?;
 
     Ok(HttpResponse::Created().body(SUCCESS_MESSAGE))
 }
@@ -180,13 +177,15 @@ where
     let email = user.email().to_owned();
     let reset_id = user_repo.password_reset(&key, now).await?;
 
-    let mut builder = EmailBuilder::new().to(email).subject("Reset password");
+    let builder = Message::builder()
+        .to(email.parse().map_err(errors::from_lettre_address)?)
+        .subject("Reset password");
 
     let url = req.url_for("password-reset-confirm", [reset_id]).unwrap();
-    builder = builder.body(format!("Please go to {} to reset your password.", url));
+    let body = format!("Please go to {url} to reset your password.");
 
     let mut sender = data.sender.write().await;
-    sender.send(builder).await?;
+    sender.send(builder, body).await?;
     Ok(HttpResponse::Ok().body(SUCCESS_MESSAGE))
 }
 
@@ -302,10 +301,11 @@ mod tests {
             .unwrap_or_else(|_| panic!("read_body_json failed during deserialization"))
     }
 
-    fn get_confirmation_url(message: &str) -> &str {
+    fn get_confirmation_url(message: &str) -> String {
+        let message = message.replace(['\n', '\r', '='], "");
         let re = Regex::new(r"http://\S+").unwrap();
-        let m = re.find(message).unwrap();
-        m.as_str()
+        let m = re.find(&message).unwrap();
+        m.as_str().to_string()
     }
 
     async fn register_user(
@@ -347,20 +347,19 @@ mod tests {
         )
         .await;
 
-        let message;
-        {
-            let confirmation = transport.write().await.emails.remove(0);
-            let tos = confirmation.envelope().to().to_vec();
+        let message = {
+            let (envelope, message) = transport.write().await.emails.borrow_mut().remove(0);
+            let tos = envelope.to().to_vec();
             assert_eq!(tos.len(), 1);
             let to = format!("{}", tos[0]);
             assert_eq!(&to, email);
-            let from = format!("{}", confirmation.envelope().from().unwrap());
+            let from = format!("{}", envelope.from().unwrap());
             assert_eq!(&from, "admin@example.com");
-            message = confirmation.message_to_string().unwrap();
-        }
+            String::from_utf8(message).unwrap()
+        };
 
         let url = get_confirmation_url(&message);
-        let req = test::TestRequest::post().uri(url).to_request();
+        let req = test::TestRequest::post().uri(&url).to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         resp
@@ -403,8 +402,8 @@ mod tests {
         .await;
 
         let message = {
-            let confirmation = transport.write().await.emails.remove(0);
-            confirmation.message_to_string().unwrap()
+            let confirmation = transport.write().await.emails.borrow_mut().remove(0);
+            String::from_utf8(confirmation.1).unwrap()
         };
         let url = get_confirmation_url(&message);
 
@@ -415,7 +414,7 @@ mod tests {
             password2,
         };
         let req = test::TestRequest::post()
-            .uri(url)
+            .uri(&url)
             .set_json(&dto)
             .to_request();
         test::call_service(&app, req).await
