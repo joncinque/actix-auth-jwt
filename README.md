@@ -132,7 +132,6 @@ used for hashing user passwords
 environment variables for configuration
 * Expose more password hashers
 * Expose all `lettre` transports
-* Update `lettre` to version 0.10 with new email builder
 * Transition `lettre` email sending to async once tokio is supported
 * Update password hashing to async, which is currently very slow
 * Add example with customized `AppConfig`
